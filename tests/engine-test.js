@@ -77,6 +77,7 @@ const CYC = {
   rate: 4, spacing: 4, ribs: 4, recruit: 4, hold: 0.5,
   first: st(4370, 4190), tilt: st(3170, 4190), firstlevel: dB(1 / 1.01), taper: dB(0.39 / 1.01),
   tymbalq: 10, outratio: 6540 / 4190, outlevel: dB(0.34 / 1.01), attack: 0.001, sustain: 1, scatter: 0,
+  body: 2, pair: 1, stiffness: 1,       // the abdomenless preparation: Open body, one tymbal, no lock
 };
 {
   const { L } = render(0.6, CYC);
@@ -158,7 +159,7 @@ const CYC = {
   const p = Object.assign({}, CYC, { outclicks: 1, outspeed: 0.5, tymbalq: 6 });
   const { L } = render(0.6, p);
   const s0 = Math.round(0.375 * SR), s1 = s0 + Math.round(0.012 * SR);
-  const n = countClicks(L, s0, s1, 0.004);
+  const n = countClicks(L, s0, s1, 0.01);
   check('Out clicks 1: four ribs pop out, then the plate', n === 5, n + ' OUT clicks');
 }
 
@@ -208,6 +209,207 @@ const CYC = {
   const { e, L } = render(1.0, Object.assign({}, CYC, { rate: 117, spacing: 0.6 }), { notes: [[60, 100, 0, 0.2]] });
   let tail = 0; for (let i = Math.round(0.8 * SR); i < L.length; i++) tail = Math.max(tail, Math.abs(L[i]));
   check('release ends in silence; the engine goes idle', tail === 0 && e.info.voices === 0, 'tail ' + tail);
+}
+
+// ================= batch 03: body, two tymbals, the lock =================
+const placeAt = (f) => { const s = st(f, 4186.01), t = Math.round(s); return { transpose: t, detune: Math.round((s - t) * 100) }; };
+// spectrum magnitude (dB) at frequency f over x[a, b), Hann window
+function specDb(x, a, b, f, rect) {
+  let re = 0, im = 0; const n = b - a, w = 2 * Math.PI * f / SR;
+  for (let i = 0; i < n; i++) { const h = rect ? 1 : 0.5 - 0.5 * Math.cos(2 * Math.PI * i / n), v = x[a + i] * h; re += v * Math.cos(w * i); im += v * Math.sin(w * i); }
+  return 10 * Math.log10(re * re + im * im + 1e-30);
+}
+// cycle-by-cycle positive peaks after the onset (the envelope), from a zero-crossing pass
+function cyclePeaks(x, a, b) {
+  const zc = []; for (let i = a; i < b - 1; i++) if (x[i] <= 0 && x[i + 1] > 0) zc.push(i);
+  const pk = []; for (let c = 0; c + 1 < zc.length; c++) { let m = 0; for (let i = zc[c]; i < zc[c + 1]; i++) m = Math.max(m, x[i]); pk.push(m); }
+  return { zc, pk };
+}
+// deepest dip between the envelope's first rise and its later maximum, as a share of the smaller side
+function worstDip(pk) {
+  let worst = 1;
+  for (let i = 1; i < pk.length - 1; i++) {
+    const left = Math.max(...pk.slice(0, i)), right = Math.max(...pk.slice(i + 1));
+    const side = Math.min(left, right);
+    if (side > 0.2 * Math.max(...pk)) worst = Math.min(worst, pk[i] / side);
+  }
+  return worst;
+}
+function sustained(p, seconds, vel) {
+  const e = new TymbalEngine(SR, 7);
+  for (const k in p) e.setParam(k, p[k]);
+  e.noteOn(60, vel || 110);
+  const n = Math.round(SR * seconds), L = new Float32Array(n), R = new Float32Array(n);
+  e.process(L, R, n);
+  return { e, L, R };
+}
+// precise pitch of a steady stretch: zero crossings, least-squares slope
+function zcPitch(x, a, b) {
+  const zc = []; for (let i = a; i < b - 1; i++) if (x[i] <= 0 && x[i + 1] > 0) zc.push(i + x[i] / (x[i] - x[i + 1]));
+  let sx = 0, sy = 0, sxx = 0, sxy = 0; const n = zc.length;
+  zc.forEach((t, k) => { sx += k; sy += t; sxx += k * k; sxy += k * t; });
+  const per = (n * sxy - sx * sy) / (n * sxx - sx * sx);
+  let worst = 0; for (let k = 1; k < n; k++) worst = Math.max(worst, Math.abs((zc[k] - zc[k - 1]) / per - 1));
+  return { f: SR / per, worst };
+}
+
+const SEPT = Object.assign(placeAt(1300), { rate: 68, ribs: 12, recruit: 4, spacing: 0.77, tymbalq: 12, tilt: -1, taper: -2, stiffness: 0.1, outlevel: -16, membrane: 1, cavity: 0.1, attack: 0.1, sustain: 1 });
+const CASS = Object.assign(placeAt(6000), { rate: 90, ribs: 12, recruit: 9, spacing: 1.02, hold: 0.92, tymbalq: 4, bodyq: 3, tilt: -1, taper: -3, outratio: 1.4, stiffness: 0.9, attack: 0.02, sustain: 1 });
+const CYCS = { rate: 117, spacing: 0.6, ribs: 4, recruit: 3, first: 0.73, tilt: -4.83, firstlevel: -0.09, taper: -8.27, tymbalq: 9.3, outratio: 1.561, outlevel: -9.45, stiffness: 0.3, bodyq: 3.4, attack: 0.02, sustain: 1 };
+
+// ---------- coupled Q: tymbal Q 9.3 into air sac Q 3.4 (Young & Bennet-Clark 1995, Table 1) ----------
+{
+  const qOf = (extra) => {
+    const p = Object.assign(placeAt(4300), { ribs: 1, recruit: 1, first: 0, rate: 2, tymbalq: 9.3, bodyq: 3.4, cavity: 0, direct: 0, pair: 1, stiffness: 1, scatter: 0, outlevel: -40, attack: 0.001, sustain: 1 }, extra);
+    const { L } = sustained(p, 0.1);
+    const n = Math.round(0.05 * SR), db = [];
+    let best = -1e9, fb = 0;
+    for (let f = 2000; f <= 7000; f += 5) {
+      let re = 0, im = 0; const w = 2 * Math.PI * f / SR;
+      for (let i = 0; i < n; i++) { re += L[i] * Math.cos(w * i); im += L[i] * Math.sin(w * i); }
+      const v = 10 * Math.log10(re * re + im * im); db.push([f, v]); if (v > best) { best = v; fb = f; }
+    }
+    const lo = db.filter(([f, v]) => f < fb && v < best - 3).pop()[0], hi = db.find(([f, v]) => f > fb && v < best - 3)[0];
+    return fb / (hi - lo);
+  };
+  const chain = qOf({}), tym = qOf({ body: 2 }), sac = qOf({ tymbalq: 2 });
+  check('tymbal and air sac together are tuned more sharply than either (Table 1: 9.3 and 3.4 give 12.5)', chain > tym && chain > sac && chain > 9.3 && chain < 15,
+    `tymbal ${tym.toFixed(1)}, sac ${sac.toFixed(1)}, both ${chain.toFixed(1)}; a passive chain of the two cannot ring longer than the tymbal, so 12.5 is out of reach`);
+}
+
+// ---------- coherent and antiphase clicks into a 4.3 kHz body (Bennet-Clark & Young 1992, Figs 14–15) ----------
+{
+  const env = (cycles) => {
+    const p = Object.assign(placeAt(4300), { ribs: 3, recruit: 3, first: 0, tilt: 0, taper: 0, rate: 2, spacing: cycles / 4300 * 1000, tymbalq: 5.6, bodyq: 7, cavity: 0, direct: 0, pair: 1, stiffness: 1, scatter: 0, outlevel: -40, hold: 0.5, attack: 0.001, sustain: 1 });
+    const { L } = sustained(p, 0.05);
+    return cyclePeaks(L, 0, Math.round(0.006 * SR)).pk;
+  };
+  const coh = env(2), anti = env(3.5 + core.TRANS_LAG / (2 * Math.PI));   // each click ends TRANS_LAG behind a linear one
+  const dc = worstDip(coh), da = worstDip(anti);
+  check('three clicks two cycles apart build one smooth pulse', dc > 0.75, `deepest dip ${(dc * 100).toFixed(0)}% of the envelope around it`);
+  check('three clicks arriving in antiphase give a humped pulse', da < 0.5, `deepest dip ${(da * 100).toFixed(0)}%`);
+}
+
+// ---------- the lock: three species ----------
+{
+  const s = sustained(SEPT, 1.2);
+  const z = zcPitch(s.L, Math.round(0.5 * SR), Math.round(1.1 * SR));
+  const cp = cyclePeaks(s.L, Math.round(0.5 * SR), Math.round(1.1 * SR)).pk;
+  const depth = Math.min(...cp) / Math.max(...cp);
+  const share = s.e.stats.locked / s.e.stats.ins;
+  check('M. septendecim: ribs and strokes lock', share > 0.85, `${s.e.stats.locked} of ${s.e.stats.ins} ribs`);
+  check('M. septendecim: an unbroken tone, no phase breaks', z.worst < 0.03 && depth > 0.4,
+    `periods within ${(z.worst * 100).toFixed(1)}%, envelope never below ${(depth * 100).toFixed(0)}% of its peak`);
+  check('Carrier mode in tune within 1 cent (pitch keeper)', Math.abs(1200 * Math.log2(z.f / 1300)) < 1, `${z.f.toFixed(2)} Hz, ${(1200 * Math.log2(z.f / 1300)).toFixed(2)} cents`);
+  // Young & Josephson 1983, Fig. 3: bandwidth at 20 dB down 0.5 kHz or less; harmonic 30 dB or more down
+  const a = Math.round(0.5 * SR), b = Math.round(1.1 * SR);
+  const p0 = specDb(s.L, a, b, z.f);
+  // the song is a line spectrum (lines 68 Hz apart): follow its envelope, the loudest line within ±80 Hz
+  const envDb = (f) => { let m = -1e9; for (let g = f - 80; g <= f + 80; g += 10) m = Math.max(m, specDb(s.L, a, b, g)); return m; };
+  let lo = z.f, hi = z.f;
+  while (envDb(lo) > p0 - 20 && lo > 200) lo -= 20;
+  while (envDb(hi) > p0 - 20 && hi < 4000) hi += 20;
+  check('M. septendecim: 20 dB bandwidth 0.5 kHz or less (Young & Josephson: Q 25)', hi - lo <= 500, `${hi - lo} Hz across the envelope of its lines`);
+  let h2 = -1e9; for (let f = 2 * z.f - 60; f <= 2 * z.f + 60; f += 5) h2 = Math.max(h2, specDb(s.L, a, b, f));
+  check('M. septendecim: harmonic at 2.6 kHz 30 dB or more down', p0 - h2 >= 30, `${(p0 - h2).toFixed(1)} dB`);
+  const stiff = sustained(Object.assign({}, SEPT, { stiffness: 1 }), 1.2);
+  const zs = zcPitch(stiff.L, Math.round(0.5 * SR), Math.round(1.1 * SR));
+  check('the same tymbal made stiff stops locking and breaks into pulses', stiff.e.stats.locked === 0 && zs.worst > 0.2,
+    `${stiff.e.stats.locked} locked, periods off by up to ${(zs.worst * 100).toFixed(0)}%`);
+}
+{
+  const c = sustained(Object.assign({}, CASS, { pair: 1 }), 0.6);        // one tymbal: the other's strokes would overlap (see tests.md)
+  const share = c.e.stats.locked / c.e.stats.ins;
+  // one stroke: count sub-pulses as envelope humps separated by dips below 30%
+  const a = Math.round(Math.round(0.3 * 90) / 90 * SR) + DELAY, b = a + Math.round(SR / 90);
+  const { pk } = cyclePeaks(c.L, a, b);
+  let humps = 0, armed = true; const top = Math.max(...pk);
+  for (const v of pk) { if (armed && v > 0.4 * top) { humps++; armed = false; } else if (!armed && v < 0.3 * top) armed = true; }
+  check('M. cassini (stiff, Q 5): sub-pulses stay separate', share < 0.05 && humps >= 8 && humps <= 10, `${humps} sub-pulses per stroke, ${(share * 100).toFixed(1)}% of ribs locked`);
+}
+{
+  const c = sustained(CYCS, 0.6), stiff = sustained(Object.assign({}, CYCS, { stiffness: 1 }), 0.6);
+  const share23 = 1.5 * c.e.stats.locked / c.e.stats.ins;      // ribs 2–3 are two thirds of all ribs
+  check('Cyclochila: most of ribs 2 and 3 lock onto the ringing (rib 1 follows the other side\'s pulse after it has died away)', share23 > 0.5 && stiff.e.stats.locked === 0,
+    `${(share23 * 100).toFixed(0)}% of ribs 2–3 at Stiffness 0.3, none when stiff`);
+}
+
+// ---------- sidebands at the carrier ± 1/click interval (Bennet-Clark & Young 1992, Fig. 16F) ----------
+{
+  const cyc3 = 3 + core.TRANS_LAG / (2 * Math.PI);          // three cycles after each click's slow start
+  const p = Object.assign(placeAt(4400), { ribs: 3, recruit: 3, first: 0, tilt: 0, taper: 0, rate: 2, spacing: cyc3 / 4400 * 1000, tymbalq: 5.6, bodyq: 7, cavity: 0, direct: 0, pair: 1, stiffness: 1, scatter: 0, outlevel: -40, attack: 0.001, sustain: 1 });
+  const { L } = sustained(p, 0.05);
+  const a = 0, b = Math.round(0.02 * SR), fs = 4400 / cyc3;
+  // a whole pulse inside the window, so no taper: the upper sideband is a lobe above the carrier
+  // with a comb null between them
+  const grid = []; for (let f = 4400; f <= 4400 + 1.6 * fs; f += 20) grid.push([f, specDb(L, a, b, f, true)]);
+  let mx = -1e9, fm = 0; for (const [f, v] of grid) if (f > 4400 + 0.5 * fs && v > mx) { mx = v; fm = f; }
+  const dip = Math.min(...grid.filter(([f]) => f < fm).map(x => x[1]));
+  const off = (fm - 4400) / fs;
+  check('clicks 3 cycles apart: a sideband lobe above the carrier, near + 1/interval (paper: + 1.45 kHz)', off > 0.6 && off < 1.2 && mx - dip > 6,
+    `lobe at +${((fm - 4400) / 1000).toFixed(2)} kHz (${(off * 100).toFixed(0)}% of 1/interval; the resonators' skirts pull it in), ${(mx - dip).toFixed(0)} dB above the null`);
+}
+
+// ---------- opercula and eardrums ----------
+{
+  const tail = (extra) => {
+    const p = Object.assign(placeAt(4300), { ribs: 1, recruit: 1, rate: 2, tymbalq: 2, bodyq: 7.8, cavity: 0, direct: 0, pair: 1, stiffness: 1, scatter: 0, outlevel: -40, attack: 0.001, sustain: 1 }, extra);
+    const { L } = sustained(p, 0.05);
+    const r = analysePulse(L, Math.round(0.0005 * SR), Math.round(0.006 * SR));
+    let e2 = 0; for (let i = 0; i < Math.round(0.02 * SR); i++) e2 += L[i] * L[i];
+    return Object.assign(r, { energy: e2 });
+  };
+  const open = tail({ aperture: 1 }), shut = tail({ aperture: 0 }), thick = tail({ membrane: 1 });
+  const fr = shut.f / open.f, qr = shut.Q / open.Q, lv = 10 * Math.log10(shut.energy / open.energy);
+  check('closed opercula: body pitch × 0.82 (model: 4.33 → 3.54 kHz)', Math.abs(fr - 0.818) < 0.02, fr.toFixed(3));
+  check('closed opercula: Q × 0.67 (7.8 → 5.2)', Math.abs(qr - 0.667) < 0.1, `${open.Q.toFixed(1)} → ${shut.Q.toFixed(1)}`);
+  check('closed opercula: about 10 dB quieter', lv < -7 && lv > -15, lv.toFixed(1) + ' dB');
+  check('thick eardrums (Membrane 1): Q × 4, pitch held by the note', thick.Q / open.Q > 3 && Math.abs(thick.f / open.f - 1) < 0.02,
+    `Q ${open.Q.toFixed(1)} → ${thick.Q.toFixed(1)}`);
+}
+
+// ---------- two tymbals ----------
+{
+  const e = new TymbalEngine(SR, 1);
+  for (const [k, v] of Object.entries(Object.assign({}, CYCS, { rate: 100 }))) e.setParam(k, v);
+  e.onsets = [];
+  e.noteOn(60, 100);
+  const L = new Float32Array(SR / 10), R = new Float32Array(SR / 10);
+  e.process(L, R, L.length);
+  const alt = e.onsets.every((s, i) => s === i % 2);
+  const t = e.voices[0].tym;
+  const off = ((t[1].nextStroke - t[0].nextStroke) / e.srOS * 1000);
+  check('Lr phase 0.5: the tymbals alternate, the right one half a cycle late', alt && Math.abs(Math.abs(off) - 5) < 0.01, `${e.onsets.length} strokes, offset ${Math.abs(off).toFixed(2)} ms`);
+  e.allNotesOff();
+  const e2 = new TymbalEngine(SR, 1);
+  for (const [k, v] of Object.entries(Object.assign({}, CYCS, { rate: 100, lrphase: 0.25 }))) e2.setParam(k, v);
+  e2.noteOn(60, 100); e2.process(L, R, L.length);
+  const t2 = e2.voices[0].tym, off2 = ((t2[1].nextStroke - t2[0].nextStroke) / e2.srOS * 1000);
+  check('Lr phase 0.25: the right tymbal a quarter cycle late (Cystosoma)', Math.abs(off2 - 2.5) < 0.01, off2.toFixed(2) + ' ms');
+  const e3 = new TymbalEngine(SR, 1);
+  for (const [k, v] of Object.entries(Object.assign({}, CYCS, { pair: 2 }))) e3.setParam(k, v);
+  e3.onsets = []; e3.noteOn(60, 100); e3.process(L, R, L.length);
+  check('Pair Right: only the right tymbal sings', e3.onsets.length > 5 && e3.onsets.every(s => s === 1), e3.onsets.length + ' strokes');
+  const sp = sustained(Object.assign({}, CYCS, { body: 2, spread: 1 }), 0.2);
+  let dlr = 0; for (let i = 0; i < sp.L.length; i++) dlr = Math.max(dlr, Math.abs(sp.L[i] - sp.R[i]));
+  check('Spread places the two tymbals left and right', dlr > 0.01, 'max L−R ' + dlr.toFixed(3));
+}
+
+// ---------- Tune and Scatter roughen the tone ----------
+{
+  const depthOf = (p) => { const s = sustained(p, 1.0); const cp = cyclePeaks(s.L, Math.round(0.5 * SR), Math.round(0.95 * SR)).pk; return Math.min(...cp) / Math.max(...cp); };
+  const base = depthOf(SEPT), tuned = depthOf(Object.assign({}, SEPT, { tune: 3 })), scat = depthOf(Object.assign({}, SEPT, { scatter: 1, stiffness: 0.6 }));
+  check('a detuned tymbal (Tune +3 st) feeds the body less evenly', tuned < base * 0.8, `envelope floor ${(base * 100).toFixed(0)}% → ${(tuned * 100).toFixed(0)}%`);
+  check('Scatter breaks the tone up', scat < base * 0.8, `envelope floor ${(base * 100).toFixed(0)}% → ${(scat * 100).toFixed(0)}%`);
+}
+
+// ---------- the body path is buffer-size independent too ----------
+{
+  const notes = [[60, 100, 0, 0.2], [62, 90, 0.12, 0.3]];
+  const ref = render(0.35, Object.assign({}, SEPT, { mode: 1 }), { block: 1, notes }).L;
+  let same = true;
+  for (const bl of [64, 777]) { const x = render(0.35, Object.assign({}, SEPT, { mode: 1 }), { block: bl, notes }).L; for (let i = 0; i < x.length; i++) if (x[i] !== ref[i]) { same = false; break; } }
+  check('lock, keeper and body: same output at buffer sizes 1, 64, 777 (Poly, two notes)', same);
 }
 
 // ---------- every parameter in range at its default ----------

@@ -71,8 +71,11 @@ Each tymbal is a **state machine** (OUT → loading → rib 1 IN → … → rib
 - **Ribs.** Each recruited rib is an event. At its moment the resonator is set to that rib's
   frequency and Q and struck with an asymmetric excitation: a short inward half-wave (about 20 µs
   in *Cyclochila*) then the rebound. The first two or three cycles are nonlinear: the frequency
-  starts low and rises 150–350 Hz (about 4–8%) as the click decays, which the engine models as a
-  frequency that falls with amplitude. [Proposed: fixed 6%, tune by ear]
+  starts low and rises 150–350 Hz (about 4–8%) as the click decays. In the engine each click first
+  runs in its own short transient, 7.5% low and recovering with a time constant of 1.5 cycles,
+  then merges into the tymbal's resonator after four time constants. Applied to the whole
+  resonator instead, a coherent train that keeps building would sit a semitone flat.
+  [Decided, batch 03]
 - **Rib table.** Frequency, Q and level per rib come from a few controls fitted to the measured
   sequences:
 
@@ -123,17 +126,27 @@ The central idea, from three of the papers:
 - The coupled trailing tymbal of *Cystosoma* buckles in phase with the resonance the leading one
   set up (Bennet-Clark & Young 1998).
 
-**In the engine** [Proposed]: each rib (rib 1 included) has a nominal moment from the muscle and
-spacing. The engine reads the reference resonator's amplitude and phase (exactly, from its two
-state values) and predicts the next moment when a click would add in phase. If that moment is
-within the **lock window** and the reference is loud enough, the rib moves there.
+**In the engine** [Decided, batch 03]: each rib (rib 1 included) has a nominal moment from the
+muscle and spacing. Half a period before it, the engine reads the reference resonator's amplitude
+and phase (exactly, from its complex state) and predicts the nearest moment when a click would
+add in phase. The rib is pulled towards that moment by at most the **lock window**.
 
-- **Window:** up to ±½ carrier period at Stiffness 0, narrowing as Stiffness rises.
-- **Gate:** the reference must still be at least ¼ of its recent peak. In Bennet-Clark's
-  preparations a rib that came while the last pulse was above about ⅓ of its peak locked; below
-  about ¼ locking broke down; at 1/10 it was gone. (The abstract says 1/10; the results put the
-  break at ¼.)
+- **Window:** ±½ carrier period × (1 − Stiffness). A rib whose in-phase moment lies outside the
+  window is still pulled as far as the window allows.
+- **Gate:** the reference must still be at least ¼ of its peak since the last click. In
+  Bennet-Clark's preparations a rib that came while the last pulse was above about ⅓ of its peak
+  locked; below about ¼ locking broke down; at 1/10 it was gone. (The abstract says 1/10; the
+  results put the break at ¼.) Measured against a longer-held peak, *Cyclochila*'s second and third
+  ribs failed the gate while the body was still building up.
+- **Aim:** a click's slow start leaves it about 0.7 rad behind a linear click once its transient is
+  over, so the lock aims half that early, the click's average phase over its transient.
 - **Reference:** the body's main mode; with an Open body, the tymbal's own ringing.
+- **Pitch keeper:** locked tones would still drift (−11 cents for *M. septendecim* without it,
+  +6 aiming the full lag early): the tymbal's ringing, its rib tilt and its transients pull the body
+  off its note. While at least half the recent ribs lock, the keeper compares the body's phase
+  advance over each block with the note's and retunes body and tymbals together (5% of the error
+  per block, at most ±0.1 octave). Pulsed songs, which lock less, are left alone: their pitch is
+  set by the body and ribs, not by one frequency. In Carrier mode, locked tones stay within 1 cent.
 - Locked ribs show in the live view.
 
 What it gives, checked against the measured Qs (the time for a click to fall to ¼ is
@@ -151,8 +164,9 @@ When clicks land out of phase, the sound gets double-humped envelopes and sideba
 sound, reached with high Stiffness, Scatter or a detuned `tune`.
 
 - **Stiffness** (0 slack … 1 stiff) sets the window, and, as the tensor muscle does in
-  *Cystosoma*, a stiffer tymbal clicks louder and shortens Lead (Simmons & Young 1978, read
-  through the brief). Default 0.6. [Proposed]
+  *Cystosoma*, a stiffer tymbal clicks louder (9 dB across the range, 0 dB at 0.6) and shortens
+  Lead (× 1.6 − Stiffness) (Simmons & Young 1978, read through the brief). Default 0.6. [Decided,
+  batch 03]
 - **Scatter** randomises each rib's nominal moment by up to one carrier period, seeded. De Jong's
   synthesis turned *Hyalessa*'s harmonic song noisy by randomising buckle timing.
 
@@ -221,7 +235,18 @@ Open uses the tymbal only.
 
 **Measured system Q.** In *Cyclochila* the tymbal (Q 9.3) driving the air sac (Q 3.4) radiates
 with Q 12.5, about the sum; song pulses measure Q 6–15 depending on whether the clicks were
-coherent. A test checks the engine reproduces this.
+coherent. A passive chain of two resonators cannot ring longer than its longer-ringing part, so
+the engine gets Q 9.9 from the same two (sharper than either, as measured, but not 12.5). Longer
+song pulses come from coherent clicks, which the lock provides.
+
+**How the Helmholtz body is built** (batch 03): a complex one-pole at the carrier, driven by both
+tymbals, plus two cavity modes at 1.75× and 2.1× (−25 dB at Cavity 0, 0 dB at 1) and a one-pole
+low-pass at 2 × the carrier. Each mode has unity gain at its peak. Closing Aperture fully: pitch
+× 0.818, Q × 0.667, level −9.4 dB (the model's 0.5–1 mm gap against open; Bennet-Clark & Young
+1992, Table 2), with the level following (1 − Aperture)^1.5. Membrane: Q × (1 + 3·Membrane),
+level −6 dB at 1. In song the radiated pitch stays with the tymbal when the opercula close: the
+air sac goes out of tune with it and the song gets about 10 dB quieter rather than lower. Until
+their batches, Bladder sounds as Helmholtz and Plant as Open.
 
 ## 6. Muscles
 
@@ -235,7 +260,8 @@ Each tymbal has its own muscle clock. [Proposed]
   *Cystosoma*: the second tymbal starts 5–7 ms after the first, a quarter of the cycle, giving the
   bimodal 20–25 ms pulse. 0 fires both together (*Platypleura* protest song).
 - `pair`: Both, Left or Right. *T. gastrica* always starts with the right tymbal; the sides
-  differ in spectrum (`asym` detunes and balances them).
+  differ in spectrum: `asym` raises the right tymbal by up to half a semitone and lowers it by up
+  to 6 dB.
 - `hold`: when in the cycle the muscle relaxes and the OUT click fires, as a share of the cycle.
   Default 0.5, so OUT lands with the other side's IN.
 - `drive`: **Sync** (one nerve impulse, one stroke; per-stroke rubato and jitter) or **Async**

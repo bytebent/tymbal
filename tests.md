@@ -3,7 +3,68 @@
 Quick results per batch: tests, experiments and pictures. Pictures live in `docs/tests/`. Run the
 tests with `node tests/engine-test.js`.
 
-**Now: 26 engine tests passing** (about 0.3 s).
+**Now: 49 engine tests passing** (about 0.7 s).
+
+## Batch 03 · body and lock
+
+How it is built:
+
+- Two tymbals per voice drive a body: a complex one-pole at the carrier plus two weak cavity modes
+  and a low-pass (Helmholtz), or nothing (Open). Lr phase, Pair, Asym and Spread place and shade
+  the second tymbal.
+- The click's nonlinear start moved into a per-click transient. Applied to the whole resonator, a
+  coherent train sat a semitone flat; now it merges after about 4 cycles and leaves pitch alone.
+- The lock: half a period before each rib, the body's phase predicts the nearest in-phase moment;
+  the rib is pulled there by at most ½ period × (1 − Stiffness), if the body is still at ¼ of its
+  peak since the last click.
+- The pitch keeper holds locked tones on the note (see below).
+
+Experiments before the tests (*M. septendecim*, *Cyclochila*, *M. cassini*):
+
+- *M. septendecim* locked 627 of 634 ribs into one tone at once, but sat 11 cents flat. The click
+  transient caused 9 of them: without it, and without rib tilt, it was within 1 cent.
+- Aiming the lock early by the whole transient lag overshot to +6 cents; the drift depends on the
+  transient, tilt, Qs and spacing together, so no constant fixes it. Added a pitch keeper that reads
+  the body's phase advance per block, acting only while half the recent ribs lock. Now +0.5 cents.
+- *Cyclochila* locked only 17% of its ribs: the gate compared with a 30 ms peak, usually an earlier
+  pulse's, while the body was still building. The paper's rule is the preceding pulse: the peak now
+  restarts at every click. 40% of all ribs, 60% of ribs 2–3, lock at Stiffness 0.3.
+- *M. cassini*'s sub-pulses ran together through a Q 6 body (dips only to 35–45%). Its song is
+  broadly tuned (overall Q 5), so its preset uses body Q 3 and tymbal Q 4: dips to about 15%.
+
+Tests:
+
+| What | Paper | Engine |
+|---|---|---|
+| Tymbal Q 9.3 into air sac Q 3.4 | 12.5 (Young & Bennet-Clark 1995, Table 1) | 9.9: sharper than the tymbal (9.0) and the sac (4.1) alone, but a passive chain cannot ring longer than its longer-ringing part, so 12.5 is out of reach |
+| Three clicks two cycles apart | one long smooth pulse (Bennet-Clark & Young 1992, Fig. 14) | smooth, no dip ✓ |
+| Three clicks in antiphase | double-humped (Fig. 15) | dips to 28% ✓ |
+| Clicks three cycles apart | sidebands at the carrier ± 1.45 kHz (Fig. 16F) | a lobe at +0.94 kHz, 25 dB above the null: there, but the resonators' skirts pull it in |
+| *M. septendecim* | unbroken tone, Q 25, 20 dB bandwidth ≤ 0.5 kHz, harmonic 30 dB down | 580 of 634 ribs locked, periods within 1.4%, envelope never below 52%, 200 Hz, 56.9 dB down ✓ |
+| Same tymbal, stiff | pulsed | none locked, periods off by up to 70% ✓ |
+| *M. cassini* | about 9 sub-pulses, rising and falling sharply | 9 per stroke, none locked ✓ |
+| *Cyclochila* | coherent ribs | 60% of ribs 2–3 locked; rib 1 follows the other side's pulse after it has died away ✓ |
+| Opercula closed (model) | 4.33 → 3.54 kHz, Q 7.8 → 5.2, about 10 dB down | × 0.813, Q 7.7 → 5.0, −9.5 dB ✓ |
+| Thick eardrums | Q 25 in *septendecim* | Membrane 1: Q × 3.9 ✓ |
+
+Also: Carrier mode within 0.48 cents on *septendecim* (pitch keeper) ✓; tymbals alternate at Lr
+phase 0.5 and sit a quarter cycle apart at 0.25 ✓; Pair Right ✓; Spread ✓; Tune +3 st and Scatter 1
+both roughen the tone (envelope floor 52% → 30% and 15%) ✓; same output at buffer sizes 1, 64 and
+777 with Poly, the lock and the keeper ✓.
+
+Found in the renders' spectra: closing the opercula during song does not lower its pitch.
+The air sac's own resonance drops to 0.82×, but the tymbal keeps driving at 4.2 kHz, so the song
+gets about 10 dB quieter instead. That fits Young & Bennet-Clark's conclusion that the tymbal is a
+major determinant of song frequency.
+
+Still open from batch 02: *M. cassini*'s two tymbals at 90 Hz each give strokes 5.5 ms apart, and
+9 sub-pulses take about 9 ms, so with both tymbals the strokes overlap. Preset 04 plays both.
+
+Renders, 2–5% of real time each:
+
+![lock](docs/tests/03-lock.png)
+
+![spectra](docs/tests/03-spectra.png)
 
 ## Batch 02 · tymbal core
 
