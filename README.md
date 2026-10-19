@@ -11,24 +11,42 @@ the periodical cicada *Magicicada septendecim* sings. Most of the sound lives be
 
 Unlike Throat and mouth-tube or Syrinx and beak-tube, the source and the body are one plugin.
 
-Status: **design**. Nothing is built yet. The reference engine and browser bench come first,
-then the C++ port and the JUCE plugin.
+Status: **prototype, batch 02 of 11**. The reference engine has the tymbal: ribs that buckle one
+by one and retune it, the OUT click, recruitment, Heat. It matches the measured rib frequencies,
+levels and Qs of *Cyclochila* (Bennet-Clark 1997) to within 1% and 1 dB. No body yet: that and the
+lock come next, then the muscles and song, the moths and hoppers, the bench, the C++ port and the
+JUCE plugin.
+
+## Try it
+
+Needs Node 18 or newer. No packages to install.
+
+```sh
+node tests/engine-test.js        # engine tests
+node tools/render-presets.js     # test presets → renders/*.wav
+```
 
 ## Files
 
 - `design.md`: what tymbal is and how it works, with every parameter
 - `plan.md`: build batches, in order
 - `research.md`: the papers behind the design and the numbers taken from them
+- `tests.md`: test results per batch, with pictures in `docs/tests/`
 
-## Planned layout
+## Layout
 
 - `reference/tymbal-engine.js`: the reference engine; defines the sound
 - `reference/presets.js`: test presets (bench and tests only)
+- `tests/engine-test.js`: engine tests
+- `tools/render-presets.js`: preset renders
+
+Later (see `plan.md`):
+
 - `source/TymbalDSP.h`: C++ port, real-time safe, no JUCE dependency
 - `source/PluginProcessor.*`, `source/PluginEditor.*`, `ui/index.html`: JUCE instrument and its
   web-view interface
-- `tests/`: engine tests, C++ against reference comparison, plugin wrapper test
-- `tools/`: bench (`tymbal.html`), performance and preset renders
+- `tools/bench/` (`tymbal.html`), `tools/perf.js`, the C++ comparison and plugin tests,
+  `packaging/`, CI
 
 ## License note
 
