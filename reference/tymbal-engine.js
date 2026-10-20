@@ -327,7 +327,10 @@
         sRe[j] += ur; sIm[j] += ui; dL[j] += ur * gL; dR[j] += ur * gR;
         const a2 = ur * ur + ui * ui; pk2 *= pdec; if (a2 > pk2) pk2 = a2;
       }
+      // flush what has died away, so silent stretches never run on subnormal numbers (slow on x86)
       if (zr * zr + zi * zi < 1e-30) { zr = 0; zi = 0; }
+      if (left === 0 || wr * wr + wi * wi < 1e-30) { wr = 0; wi = 0; }
+      if (pk2 < 1e-30) pk2 = 0;
       this.zr = zr; this.zi = zi; this.wr = wr; this.wi = wi; this.weps = eps; this.wleft = left; this.pk2 = pk2;
     }
   }
@@ -465,9 +468,10 @@
       // in an echeme or phrase, a stroke must fit before its sound part ends (the first always sounds)
       if (e.song !== SONG_CONT && !this.uFirst && T + C > this.uOn + 1e-6) { this.nextCycle = Math.max(this.uEnd, T + 1); return; }
       this.uFirst = false;
-      for (const t of this.tym) {
-        if (!e.tymOn[t.side]) continue;
-        t.nextStroke = T + (t.side && e.tymOn[0] ? e.lrphase * C : 0);
+      for (let s = 0; s < 2; s++) {
+        if (!e.tymOn[s]) continue;
+        const t = this.tym[s];
+        t.nextStroke = T + (s && e.tymOn[0] ? e.lrphase * C : 0);
         t.pendC = C; t.pendF = force;
       }
       this.nextCycle = T + C;
@@ -524,10 +528,20 @@
       this.kc = clamp(this.kc - KEEP_RATE * err / (this.omNote * nOS) / Math.LN2, -KEEP_MAX, KEEP_MAX);
     }
 
+    // nothing is ringing: tymbals and body all at zero (between phrases, after a note)
+    silent() {
+      const a = this.tym[0], b = this.tym[1];
+      return a.zr === 0 && a.zi === 0 && a.wr === 0 && a.wi === 0 && b.zr === 0 && b.zi === 0 && b.wr === 0 && b.wi === 0 &&
+        this.b0r === 0 && this.b0i === 0 && this.b1r === 0 && this.b1i === 0 && this.b2r === 0 && this.b2i === 0 && this.lp === 0;
+    }
+
     // run tymbals and body over [j0, j1)
     run(j0, j1, oL, oR) {
       const e = this.e;
-      for (const t of this.tym) t.advance(j0, j1, this.sRe, this.sIm, this.dL, this.dR, e.panL[t.side], e.panR[t.side]);
+      if (this.silent()) return;                 // silence adds nothing; skip the per-sample loops
+      const t0 = this.tym[0], t1 = this.tym[1];
+      t0.advance(j0, j1, this.sRe, this.sIm, this.dL, this.dR, e.panL[0], e.panR[0]);
+      t1.advance(j0, j1, this.sRe, this.sIm, this.dL, this.dR, e.panL[1], e.panR[1]);
       const sRe = this.sRe, sIm = this.sIm, dL = this.dL, dR = this.dR;
       if (!e.bodyOn) {
         for (let j = j0; j < j1; j++) { oL[j] += dL[j]; oR[j] += dR[j]; }
@@ -546,6 +560,11 @@
         oL[j] += y + dir * dL[j]; oR[j] += y + dir * dR[j];
         const a2 = b0r * b0r + b0i * b0i; pk2 *= pdec; if (a2 > pk2) pk2 = a2;
       }
+      if (b0r * b0r + b0i * b0i < 1e-30) { b0r = 0; b0i = 0; }
+      if (b1r * b1r + b1i * b1i < 1e-30) { b1r = 0; b1i = 0; }
+      if (b2r * b2r + b2i * b2i < 1e-30) { b2r = 0; b2i = 0; }
+      if (lp * lp < 1e-30) lp = 0;
+      if (pk2 < 1e-30) pk2 = 0;
       this.b0r = b0r; this.b0i = b0i; this.b1r = b1r; this.b1i = b1i; this.b2r = b2r; this.b2i = b2i; this.lp = lp; this.pk2 = pk2;
     }
 
@@ -562,7 +581,9 @@
       for (;;) {
         // the muscle clock first on a tie, so a stroke it issues can start at the same moment
         let tb = this.muscleOn ? this.nextCycle : Infinity, which = null;
-        for (const t of this.tym) { const x = t.nextTime(); if (x < tb) { tb = x; which = t; } }
+        const x0 = this.tym[0].nextTime(), x1 = this.tym[1].nextTime();
+        if (x0 < tb) { tb = x0; which = this.tym[0]; }
+        if (x1 < tb) { tb = x1; which = this.tym[1]; }
         const rel = tb - t0;
         if (rel >= nOS) { this.run(j, nOS, oL, oR); break; }
         const upto = Math.min(nOS, Math.max(j, Math.ceil(rel)));
@@ -573,10 +594,10 @@
       }
       this.keep(s0r, s0i, nOS);
       // done: the muscle has stopped and everything has rung out
-      const busy = this.tym.some(t => t.iEv < t.nEv);
+      const busy = this.tym[0].iEv < this.tym[0].nEv || this.tym[1].iEv < this.tym[1].nEv;
       if (!this.muscleOn && !busy && this.tym[0].energy() + this.tym[1].energy() + this.bodyEnergy() < 1e-14) {
         this.stage = 0; this.note = -1; this.held = false;
-        for (const t of this.tym) t.reset();
+        this.tym[0].reset(); this.tym[1].reset();
       }
       this.fNow = e.fCarrier;
     }
@@ -745,22 +766,22 @@
       const qb = P[PINDEX.bodyq] * (AP_Q_CLOSED + (1 - AP_Q_CLOSED) * ap) * (1 + MEMBRANE_Q * mem);
       v.periodS = this.srOS / fb;
       v.halfT = 0.5 * v.periodS;
-      const mode = (fr, q, lvl) => {
-        const om = TWO_PI * Math.min(fr, 0.45 * this.srOS) / this.srOS, r = Math.exp(-Math.PI * fr / (q * this.srOS));
-        return [r * Math.cos(om), r * Math.sin(om), (1 - r) * lvl, om, r];
-      };
-      let c = mode(fb, qb, 1);
-      v.c0r = c[0]; v.c0i = c[1]; v.g0 = c[2]; v.om0 = c[3]; v.r0 = c[4];
-      const cav = dbToGain(-25 + 25 * P[PINDEX.cavity]);
-      c = mode(fb * CAVITY_RATIOS[0], qb, cav); v.c1r = c[0]; v.c1i = c[1]; v.g1 = c[2];
-      c = mode(fb * CAVITY_RATIOS[1], qb, cav); v.c2r = c[0]; v.c2i = c[1]; v.g2 = c[2];
+      // each mode: pole r·e^{iω}, input gain (1 − r)·level (unity at its peak); no allocation
+      const srOS = this.srOS, cav = dbToGain(-25 + 25 * P[PINDEX.cavity]);
+      let fr = fb, om = TWO_PI * Math.min(fr, 0.45 * srOS) / srOS, r = Math.exp(-Math.PI * fr / (qb * srOS));
+      v.c0r = r * Math.cos(om); v.c0i = r * Math.sin(om); v.g0 = 1 - r; v.om0 = om; v.r0 = r;
+      fr = fb * CAVITY_RATIOS[0]; om = TWO_PI * Math.min(fr, 0.45 * srOS) / srOS; r = Math.exp(-Math.PI * fr / (qb * srOS));
+      v.c1r = r * Math.cos(om); v.c1i = r * Math.sin(om); v.g1 = (1 - r) * cav;
+      fr = fb * CAVITY_RATIOS[1]; om = TWO_PI * Math.min(fr, 0.45 * srOS) / srOS; r = Math.exp(-Math.PI * fr / (qb * srOS));
+      v.c2r = r * Math.cos(om); v.c2i = r * Math.sin(om); v.g2 = (1 - r) * cav;
       v.kLP = 1 - Math.exp(-TWO_PI * Math.min(2 * fb, 0.4 * this.srOS) / this.srOS);
       v.bodyLevel = BODY_GAIN * dbToGain(AP_DB_CLOSED * Math.pow(1 - ap, 1.5) + MEMBRANE_DB * mem);
     }
 
     processBlock() {
       const d = this.dc;
-      const any = this.voices.some(v => v.stage !== 0);
+      let any = false;
+      for (let i = 0; i < MAX_VOICES; i++) if (this.voices[i].stage !== 0) { any = true; break; }
       if (!any && this.quietBlocks > 1 && Math.abs(d.yl) + Math.abs(d.xl) + Math.abs(d.yr) + Math.abs(d.xr) < 1e-12) {
         this.blkL.fill(0); this.blkR.fill(0); d.xl = d.yl = d.xr = d.yr = 0;
         this.osTimeBase += BLOCK * OS;
@@ -772,7 +793,9 @@
       const nOS = BLOCK * OS, oL = this.osL, oR = this.osR;
       oL.fill(0); oR.fill(0);
       let count = 0, newest = -1;
-      for (const v of this.voices) if (v.stage !== 0) {
+      for (let i = 0; i < MAX_VOICES; i++) {
+        const v = this.voices[i];
+        if (v.stage === 0) continue;
         v.render(nOS, oL, oR);
         count++;
         if (v.age > newest) { newest = v.age; this.info.carrier = v.fNow; this.info.rib = v.tym[0].state; this.info.f = v.tym[0].lastF; this.info.q = v.tym[0].lastQ; }

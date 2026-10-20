@@ -3,7 +3,45 @@
 Quick results per batch: tests, experiments and pictures. Pictures live in `docs/tests/`. Run the
 tests with `node tests/engine-test.js`.
 
-**Now: 72 engine tests passing** (about 2 s).
+**Now: 72 engine tests passing** (about 2 s). Benchmark: `node tools/perf.js`.
+
+## Batch 05 · cost
+
+`node tools/perf.js`, each scenario in a fresh Node process (running them one after another in one
+process let one scenario's JIT state move another's number by up to 2×), best of two runs of 3 s,
+one 2.8 GHz Xeon core, 48 kHz:
+
+| Scenario | Core | IN clicks/s | Strokes/s |
+|---|---|---|---|
+| Silent (no notes) | 0.08% | 0 | 0 |
+| 1 voice, defaults | 2.44% | 702 | 234 |
+| 1 voice, *Cyclochila* calling song | 2.28% | 702 | 234 |
+| 1 voice, *M. septendecim*, locked tone | 2.51% | 339 | 92 |
+| 1 voice, *M. cassini* phrase | 2.41% | 903 | 100 |
+| 1 voice, Open body | 2.73% | 468 | 117 |
+| 1 voice, Async | 2.49% | 654 | 392 |
+| 1 voice, Rate mode at C6 | 2.36% | 2093 | 1047 |
+| 1 voice, worst case | 4.44% | 26245 | 1177 |
+| 8 voices, defaults | 6.02% | 5615 | 1871 |
+| 8 voices, *Cyclochila* calling song | 7.54% | 5615 | 1871 |
+| 8 voices, worst case | 22.14% | 207464 | 9332 |
+
+Worst case: 24 ribs 0.05 ms apart, 600 strokes per second per tymbal, every rib clicking out, both
+cavity modes loud, a slack tymbal so every rib runs the lock. One voice is mostly fixed cost (the
+decimation filter and controls, about 1.9%); each further voice adds about 0.5%. Clicks cost about
+0.8 µs each. **Poly gets all 8 voices.** Repeat runs agree within about 0.5 points.
+
+Found and fixed:
+
+- *M. cassini*'s phrase cost 5.9%, more than twice the others. Its 1 s rests kept the voice running
+  while its resonators decayed into subnormal numbers, which are slow on x86 (continuous song or
+  no rest: 2.6–2.9%). States below −300 dB are now set to zero, and a voice whose tymbals and body
+  are all at zero skips its per-sample loops: 2.4%.
+- `voicePitch` built a closure and three small arrays every block, and the hot paths used
+  callbacks and `for … of`. All replaced by plain code. Minor collections in 20 s of four busy
+  voices: 108 → 81 (one busy voice 17, silence 1; Syrinx 22 and Dolphin 20 with four voices on
+  their defaults). What is left follows the click rate: V8 boxing the doubles returned from small
+  per-event calls. The C++ port does not allocate.
 
 ## Batch 04 · muscles and song
 

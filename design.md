@@ -306,7 +306,7 @@ heard pitch by some cents. A stiffer tymbal (0.8 in the melody preset) keeps pul
 A Trigger mode (each note one stroke or phrase, for drums) can be added after the listening
 round. [Open]
 
-Common: Mono or Poly (8 voices) [Proposed, after the cost batch], glide, bend range, detune.
+Common: Mono or Poly (8 voices) [Decided, batch 05], glide, bend range, detune.
 Velocity sets effort (level and recruitment); aftertouch opens Aperture from its setting towards
 fully open (+10 dB from shut). [Decided, batch 04]
 
@@ -470,11 +470,19 @@ Same rules as Throat, Dolphin and Syrinx:
 - The lock reads the reference resonator's state once per rib event and computes the next
   in-phase moment directly; there is no per-sample search.
 - The C++ port is checked sample by sample against the reference, built with `-ffp-contract=off`.
-- Idle voices, silent tymbals and unused body types do no work.
+- Idle voices, silent tymbals and unused body types do no work. A voice whose tymbals and body
+  have all died away (between phrases and echemes) skips its per-sample loops, and states that
+  fall below −300 dB are set to zero, so silence never runs on subnormal numbers. [Decided, batch 05]
 - Reuse from Dolphin: the note, glide and envelope handling, the event scheduler (Pattern and
   Coda become strokes and echemes), the sub-sample event writer, the FIR and the bench.
-- **Estimated cost** (from the brief, to be measured in batch 05): a dozen to sixteen two-pole
-  resonators per voice, well under 1% of a core per voice in C++, 1–3% in JavaScript.
+- **Cost** (batch 05, JavaScript, one 2.8 GHz Xeon core at 48 kHz, `node tools/perf.js`): about
+  2.4% for one voice, of which about 1.9% is fixed (decimation, controls); each further voice
+  about 0.5%. Eight voices at the defaults 6%, at the worst case (24 ribs 0.05 ms apart, 600
+  strokes per second per tymbal, every rib clicking out, 26,000 clicks per second per voice) 22%.
+  Event handling costs about 0.8 µs per click. Poly gets all 8 voices. [Decided, batch 05]
+- **Allocation:** no closures or arrays per block. What is left in JavaScript is V8 boxing doubles
+  returned from small per-event calls: about 4 minor collections per second for four busy voices,
+  the same order as Syrinx and Dolphin. The C++ port does not allocate.
 
 Engine interface: `new TymbalEngine(sr, seed)`, `setParam`, `noteOn` / `noteOff`, `setBend`,
 `setAftertouch`, `process(L, R, n)`, and `onsets()` for krill.
