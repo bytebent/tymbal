@@ -77,7 +77,7 @@ const CYC = {
   rate: 4, spacing: 4, ribs: 4, recruit: 4, hold: 0.5,
   first: st(4370, 4190), tilt: st(3170, 4190), firstlevel: dB(1 / 1.01), taper: dB(0.39 / 1.01),
   tymbalq: 10, outratio: 6540 / 4190, outlevel: dB(0.34 / 1.01), attack: 0.001, sustain: 1, scatter: 0,
-  body: 2, pair: 1, stiffness: 1,       // the abdomenless preparation: Open body, one tymbal, no lock
+  body: 2, pair: 1, stiffness: 1, jitter: 0,   // the abdomenless preparation: Open body, one tymbal, no lock; strokes exactly on time
 };
 {
   const { L } = render(0.6, CYC);
@@ -376,20 +376,24 @@ const CYCS = { rate: 117, spacing: 0.6, ribs: 4, recruit: 3, first: 0.73, tilt: 
   e.noteOn(60, 100);
   const L = new Float32Array(SR / 10), R = new Float32Array(SR / 10);
   e.process(L, R, L.length);
-  const alt = e.onsets.every((s, i) => s === i % 2);
-  const t = e.voices[0].tym;
-  const off = ((t[1].nextStroke - t[0].nextStroke) / e.srOS * 1000);
-  check('Lr phase 0.5: the tymbals alternate, the right one half a cycle late', alt && Math.abs(Math.abs(off) - 5) < 0.01, `${e.onsets.length} strokes, offset ${Math.abs(off).toFixed(2)} ms`);
+  // stroke times relative to the cycle they belong to (Jitter moves each cycle, not the phase within it)
+  const lag = (ons) => { const out = []; for (let i = 1; i < ons.length; i++) if (ons[i][1] === 1 && ons[i - 1][1] === 0) out.push(ons[i][0] - ons[i - 1][0]); return out; };
+  const cyc = (ons) => { const l = ons.filter(o => o[1] === 0); return (l[l.length - 1][0] - l[0][0]) / (l.length - 1); };
+  const alt = e.onsets.every((o, i) => o[1] === i % 2);
+  const ph = lag(e.onsets).map(x => x / cyc(e.onsets));
+  const mean = ph.reduce((a, b) => a + b) / ph.length;
+  check('Lr phase 0.5: the tymbals alternate, the right one half a cycle late', alt && Math.abs(mean - 0.5) < 0.02, `${e.onsets.length} strokes, at ${mean.toFixed(3)} of the cycle`);
   e.allNotesOff();
   const e2 = new TymbalEngine(SR, 1);
   for (const [k, v] of Object.entries(Object.assign({}, CYCS, { rate: 100, lrphase: 0.25 }))) e2.setParam(k, v);
+  e2.onsets = [];
   e2.noteOn(60, 100); e2.process(L, R, L.length);
-  const t2 = e2.voices[0].tym, off2 = ((t2[1].nextStroke - t2[0].nextStroke) / e2.srOS * 1000);
-  check('Lr phase 0.25: the right tymbal a quarter cycle late (Cystosoma)', Math.abs(off2 - 2.5) < 0.01, off2.toFixed(2) + ' ms');
+  const ph2 = lag(e2.onsets).map(x => x / cyc(e2.onsets)), m2 = ph2.reduce((a, b) => a + b) / ph2.length;
+  check('Lr phase 0.25: the right tymbal a quarter cycle late (Cystosoma)', Math.abs(m2 - 0.25) < 0.02, `at ${m2.toFixed(3)} of the cycle`);
   const e3 = new TymbalEngine(SR, 1);
   for (const [k, v] of Object.entries(Object.assign({}, CYCS, { pair: 2 }))) e3.setParam(k, v);
   e3.onsets = []; e3.noteOn(60, 100); e3.process(L, R, L.length);
-  check('Pair Right: only the right tymbal sings', e3.onsets.length > 5 && e3.onsets.every(s => s === 1), e3.onsets.length + ' strokes');
+  check('Pair Right: only the right tymbal sings', e3.onsets.length > 5 && e3.onsets.every(o => o[1] === 1), e3.onsets.length + ' strokes');
   const sp = sustained(Object.assign({}, CYCS, { body: 2, spread: 1 }), 0.2);
   let dlr = 0; for (let i = 0; i < sp.L.length; i++) dlr = Math.max(dlr, Math.abs(sp.L[i] - sp.R[i]));
   check('Spread places the two tymbals left and right', dlr > 0.01, 'max L−R ' + dlr.toFixed(3));
@@ -410,6 +414,193 @@ const CYCS = { rate: 117, spacing: 0.6, ribs: 4, recruit: 3, first: 0.73, tilt: 
   let same = true;
   for (const bl of [64, 777]) { const x = render(0.35, Object.assign({}, SEPT, { mode: 1 }), { block: bl, notes }).L; for (let i = 0; i < x.length; i++) if (x[i] !== ref[i]) { same = false; break; } }
   check('lock, keeper and body: same output at buffer sizes 1, 64, 777 (Poly, two notes)', same);
+}
+
+// ================= batch 04: muscles, song, Rate mode =================
+function songRun(p, seconds, opts) {
+  opts = opts || {};
+  const e = new TymbalEngine(SR, opts.seed || 7);
+  for (const k in p) e.setParam(k, p[k]);
+  if (opts.tempo) e.setTempo(opts.tempo);
+  e.onsets = [];
+  e.noteOn(opts.note || 60, opts.vel || 110);
+  const n = Math.round(SR * seconds), L = new Float32Array(n), R = new Float32Array(n);
+  const bl = opts.block || n;
+  const tl = new Float32Array(bl), tr = new Float32Array(bl);
+  for (let i = 0; i < n; i += bl) { const m = Math.min(bl, n - i); e.process(tl, tr, m); L.set(tl.subarray(0, m), i); R.set(tr.subarray(0, m), i); }
+  return { e, L, R };
+}
+// envelope maxima in steps of `step` samples
+function stepEnv(x, a, b, step) { const out = []; for (let i = a; i < b; i += step) { let m = 0; for (let j = i; j < Math.min(i + step, x.length); j++) m = Math.max(m, Math.abs(x[j])); out.push(m); } return out; }
+// sound segments from a 1 ms envelope: [start, end] in ms, split by at least `quietMs` below thr × max
+function segments(x, quietMs, thrShare) {
+  const ev = stepEnv(x, 0, x.length, SR / 1000), thr = thrShare * Math.max(...ev);
+  const segs = []; let on = false, st = 0, quiet = 0;
+  for (let i = 0; i < ev.length; i++) {
+    if (ev[i] > thr) { if (!on) { on = true; st = i; } quiet = 0; }
+    else if (on && ++quiet >= quietMs) { segs.push([st, i - quiet + 1]); on = false; }
+  }
+  return segs;
+}
+// pulse rate from the envelope's periodicity: correlation peak near the expected lag, refined at
+// ever longer lags (an error of a fraction of a sample is divided by the number of periods)
+function pulseRate(x, a, b, fGuess) {
+  const env = new Float64Array(b - a); let y = 0; const k = 1 - Math.exp(-2 * Math.PI * 1500 / SR);
+  for (let i = a; i < b; i++) { y += k * (Math.abs(x[i]) - y); env[i - a] = y; }
+  let mean = 0; for (const v of env) mean += v; mean /= env.length; for (let i = 0; i < env.length; i++) env[i] -= mean;
+  const n = env.length;
+  const ac = (lag) => { let s = 0, p = 0, q = 0; for (let i = 0; i + lag < n; i++) { s += env[i] * env[i + lag]; p += env[i] * env[i]; q += env[i + lag] * env[i + lag]; } return s / Math.sqrt(p * q); };
+  const peak = (from, to) => { let best = from, bv = -Infinity; for (let l = from; l <= to; l++) { const v = ac(l); if (v > bv) { bv = v; best = l; } } const y0 = ac(best - 1), y2 = ac(best + 1); return best + 0.5 * (y0 - y2) / (y0 - 2 * bv + y2); };
+  let T = SR / fGuess;
+  T = peak(Math.floor(T * 0.9), Math.ceil(T * 1.1));
+  for (let m = 4; m * T < n / 2; m *= 4) T = peak(Math.round(m * T) - 2, Math.round(m * T) + 2) / m;
+  return SR / T;
+}
+
+const CYSTO = Object.assign(placeAt(850), { rate: 40, lrphase: 0.25, ribs: 4, recruit: 3, first: 5, lead: 1.7, spacing: 0.9, tilt: -4, taper: -6, tymbalq: 15, bodyq: 9, stiffness: 0.4, outratio: 2, outlevel: -12, hold: 0.7, attack: 0.02, jitter: 0 });
+const ORNI = Object.assign(placeAt(4300), { song: 1, echeme: 0.105, gap: 0.08, rate: 100, ribs: 4, recruit: 3, spacing: 0.6, tymbalq: 8, bodyq: 5, stiffness: 0.5, jitter: 0.2, attack: 0.005 });
+const CASS_PHRASE = Object.assign({}, CASS, { song: 2, phrase: 2.5, rest: 1, intro: 0.4, start: 0.11 });
+
+// ---------- Cystosoma: bimodal pulses (Bennet-Clark & Young 1998, Figs 4 and 12) ----------
+{
+  const { L, e } = songRun(Object.assign({}, CYSTO, { jitter: 0.03, rubato: 0.1 }), 2.0);
+  const left = e.onsets.filter(o => o[1] === 0 && o[0] > 0.2 && o[0] < 1.9);
+  const lag = e.onsets.filter(o => o[1] === 1 && o[0] > 0.2 && o[0] < 1.9).map((o, i) => (o[0] - left[i][0]) * 1000);
+  let bimodal = 0; const seps = [], dips = [], durs = [];
+  for (const [t] of left) {
+    const a = Math.round(t * SR) + DELAY, ev = stepEnv(L, a, a + Math.round(0.025 * SR), SR / 2000);   // 0.5 ms steps
+    const top = Math.max(...ev), iMax = ev.indexOf(top);
+    // an earlier hump at least 3 ms before the largest, with a dip of 15% or more between them
+    let i1 = -1, dip = 1;
+    for (let i = 0; i < iMax - 6; i++) { const between = Math.min(...ev.slice(i + 1, iMax)); if (ev[i] >= between * 1.15 && (i1 < 0 || ev[i] > ev[i1])) { i1 = i; dip = between / ev[i]; } }
+    if (i1 >= 0) { bimodal++; seps.push((iMax - i1) * 0.5); dips.push(dip); }
+    const on = ev.findIndex(v => v > 0.1 * top), off = ev.length - 1 - [...ev].reverse().findIndex(v => v > 0.1 * top);
+    durs.push((off - on) * 0.5);
+  }
+  const med = (x) => { const y = [...x].sort((p, q) => p - q); return y[y.length >> 1]; };
+  check('Cystosoma: the second tymbal starts 5–7 ms after the first', lag.every(x => x >= 5 && x <= 7), `${Math.min(...lag).toFixed(2)}–${Math.max(...lag).toFixed(2)} ms`);
+  check('Cystosoma: bimodal pulses, humps about 5–7 ms apart', bimodal >= 0.9 * left.length && med(seps) >= 4.5 && med(seps) <= 7,
+    `${bimodal} of ${left.length} pulses, humps a median ${med(seps)} ms apart, dip to ${(med(dips) * 100).toFixed(0)}% of the first`);
+  check('Cystosoma: pulses about 20–25 ms long (paper: 20–23 ms, above 10% of the peak)', med(durs) >= 18 && med(durs) <= 25, `median ${med(durs)} ms`);
+}
+
+// ---------- M. cassini: phrase from about 20 to 180 pulses/s (Young & Josephson 1983) ----------
+{
+  const { e } = songRun(CASS_PHRASE, 4);
+  const t = e.onsets.map(o => o[0]), rateIn = (a, b) => t.filter(x => x >= a && x < b).length / (b - a);
+  const slow = rateIn(0.05, 0.75), fast = rateIn(1.2, 2.4), rest = rateIn(2.55, 3.45), next = rateIn(3.55, 4);
+  check('M. cassini phrase: starts at 15–30 pulses/s', slow >= 15 && slow <= 30, slow.toFixed(1) + ' /s');
+  check('M. cassini phrase: ends at 170–200 pulses/s', fast >= 170 && fast <= 200, fast.toFixed(1) + ' /s');
+  check('M. cassini phrase: silent rest, then the next phrase starts slow again', rest === 0 && next >= 15 && next <= 30, `rest ${rest} /s, next phrase ${next.toFixed(1)} /s`);
+}
+
+// ---------- C. orni: echemes 84–116 ms, gaps 84–93 ms (Pinto-Juma et al., via the brief) ----------
+{
+  const { L } = songRun(ORNI, 4);
+  const segs = segments(L, 15, 0.1).slice(1, -1);
+  const lens = segs.map(s => s[1] - s[0]), gaps = segs.slice(1).map((s, i) => s[0] - segs[i][1]);
+  const rate = (segs.length - 1) / ((segs[segs.length - 1][0] - segs[0][0]) / 1000);
+  check('C. orni: echemes 84–116 ms, varied by Jitter', Math.min(...lens) >= 84 && Math.max(...lens) <= 116 && Math.max(...lens) - Math.min(...lens) > 8,
+    `${lens.length} echemes, ${Math.min(...lens)}–${Math.max(...lens)} ms`);
+  check('C. orni: gaps about 84–93 ms, 4.7–5.6 echemes/s', Math.min(...gaps) >= 80 && Math.max(...gaps) <= 100 && rate >= 4.7 && rate <= 5.6,
+    `gaps ${Math.min(...gaps)}–${Math.max(...gaps)} ms, ${rate.toFixed(2)} echemes/s`);
+}
+
+// ---------- one stroke always sounds: Ticks ----------
+{
+  const { e } = songRun(Object.assign({}, CYCS, { song: 1, echeme: 0.005, gap: 0.2, jitter: 0 }), 1.1);
+  const per = e.onsets.filter(o => o[1] === 0).map(o => o[0]);
+  const gapsOk = per.slice(1).every((t, i) => Math.abs(t - per[i] - 0.205) < 1e-6);
+  check('an echeme shorter than a muscle cycle still sounds one stroke (Ticks)', per.length === 6 && gapsOk, `${per.length} ticks, 205 ms apart`);
+}
+
+// ---------- Rate mode: the note sets the pulse rate ----------
+{
+  const base = Object.assign({}, CYCS, { playmode: 1, carrier: 4300, jitter: 0, asym: 0 });
+  const results = [48, 60, 67].map(note => {
+    const { L } = songRun(base, 1.0, { note });
+    const want = 440 * Math.pow(2, (note - 69) / 12), got = pulseRate(L, Math.round(0.3 * SR), Math.round(0.95 * SR), want);
+    return [note, want, got, 1200 * Math.log2(got / want)];
+  });
+  const worst = Math.max(...results.map(r => Math.abs(r[3])));
+  check('Rate mode: pulse rate within 1 cent of the note (C3, C4, G4)', worst < 1, results.map(r => `${r[2].toFixed(2)} Hz (${r[3].toFixed(2)} c)`).join(', '));
+  const { e } = songRun(base, 0.3);
+  check('Rate mode: the body sits at the Carrier knob', Math.abs(e.info.carrier - 4300) < 0.01, e.info.carrier.toFixed(2) + ' Hz');
+  // Heat: the stroke clock, and the sound with the lock off (locked ribs snap to the carrier's phase
+  // grid, which moves each pulse by up to half a carrier period; see tests.md)
+  const strokeRate = (r) => { const o = r.e.onsets.filter(x => x[0] > 0.3); return (o.length - 1) / (o[o.length - 1][0] - o[0][0]); };
+  const hot = songRun(Object.assign({}, base, { heat: 38, stiffness: 1 }), 1.0), cold = songRun(Object.assign({}, base, { heat: 22, stiffness: 1 }), 1.0);
+  const fh = pulseRate(hot.L, Math.round(0.3 * SR), Math.round(0.95 * SR), 261.6), fc = pulseRate(cold.L, Math.round(0.3 * SR), Math.round(0.95 * SR), 261.6);
+  const sh = strokeRate(songRun(Object.assign({}, base, { heat: 38 }), 1.0)), scd = strokeRate(songRun(Object.assign({}, base, { heat: 22 }), 1.0));
+  check('Rate mode: Heat leaves the pitch alone', Math.abs(1200 * Math.log2(fh / fc)) < 1 && Math.abs(1200 * Math.log2(sh / scd)) < 0.01,
+    `strokes ${scd.toFixed(3)} → ${sh.toFixed(3)} /s; sound (no lock) ${fc.toFixed(2)} → ${fh.toFixed(2)} Hz`);
+  const one = songRun(Object.assign({}, base, { pair: 1 }), 1.0), f1 = pulseRate(one.L, Math.round(0.3 * SR), Math.round(0.95 * SR), 261.6);
+  check('Rate mode with one tymbal: it runs at the note itself', Math.abs(1200 * Math.log2(f1 / 261.63)) < 1, f1.toFixed(2) + ' Hz');
+  const jit = songRun(Object.assign({}, base, { jitter: 0.03 }), 2.0), fj = pulseRate(jit.L, Math.round(0.3 * SR), Math.round(1.95 * SR), 261.6);
+  check('Rate mode with the default Jitter: within 5 cents on average', Math.abs(1200 * Math.log2(fj / 261.63)) < 5, (1200 * Math.log2(fj / 261.63)).toFixed(2) + ' cents');
+}
+
+// ---------- Async: one command per burst, the force runs down ----------
+{
+  const { e } = songRun(Object.assign({}, CYCS, { drive: 1, burst: 4, rate: 100, lrphase: 0, jitter: 0 }), 0.5);
+  const a = e.onsets.filter(o => o[1] === 0).slice(4, 16).map(o => o[2]);
+  const pat = a.map(x => x / a[0]);
+  const want = [1, 0.85, 0.7, 0.55];
+  const ok = pat.every((x, i) => Math.abs(x - want[i % 4]) < 0.01);
+  check('Async (burst 4): force 1, 0.85, 0.7, 0.55, then the next command', ok, pat.map(x => x.toFixed(2)).join(' '));
+  const syncR = songRun(Object.assign({}, CYCS, { rate: 100, jitter: 0 }), 0.5).e.onsets.filter(o => o[1] === 0).slice(4, 12).map(o => o[2]);
+  check('Sync: every stroke at full force', syncR.every(x => Math.abs(x / syncR[0] - 1) < 1e-9));
+}
+
+// ---------- Fall: the end of a phrase drops in level and pitch (M. septendecim) ----------
+{
+  const p = Object.assign({}, SEPT, { song: 2, phrase: 2, rest: 1, fall: 1, jitter: 0 });
+  const { L, e } = songRun(p, 2.2);
+  const z0 = zcPitch(L, Math.round(0.6 * SR), Math.round(1.2 * SR)), z1 = zcPitch(L, Math.round(1.93 * SR), Math.round(1.99 * SR));
+  const drop = 1200 * Math.log2(z1.f / z0.f);
+  let a0 = 0, a1 = 0; for (let i = Math.round(0.6 * SR); i < Math.round(1.2 * SR); i++) a0 = Math.max(a0, Math.abs(L[i])); for (let i = Math.round(1.9 * SR); i < Math.round(1.99 * SR); i++) a1 = Math.max(a1, Math.abs(L[i]));
+  check('Fall 1: pitch drops toward 4 semitones at the end of the phrase', drop < -300 && drop > -420, `${z0.f.toFixed(0)} → ${z1.f.toFixed(0)} Hz, ${drop.toFixed(0)} cents`);
+  check('Fall 1: level drops at the end of the phrase', dB(a1 / a0) < -6, dB(a1 / a0).toFixed(1) + ' dB');
+}
+
+// ---------- Sync: echemes on a beat division ----------
+{
+  const { e } = songRun(Object.assign({}, ORNI, { sync: 1, rubato: 0.5 }), 2.0, { tempo: 120 });
+  const firsts = []; let last = -1;
+  for (const o of e.onsets) if (o[1] === 0 && o[0] - last > 0.03) { firsts.push(o[0]); last = o[0]; } else if (o[1] === 0) last = o[0];
+  const per = firsts.slice(1).map((t, i) => t - firsts[i]);
+  check('Sync at 120 bpm: echemes every third of a beat (0.188 s snaps to 0.1667), ignoring Rubato', per.every(x => Math.abs(x - 1 / 6) < 1e-6), `${per.length} periods, ${per[0].toFixed(4)} s`);
+}
+
+// ---------- Rubato drifts the tempo; Jitter does not move the average ----------
+{
+  const strokes = (rub, jit) => { const { e } = songRun(Object.assign({}, CYCS, { rubato: rub, jitter: jit }), 3.0); const l = e.onsets.filter(o => o[1] === 0).map(o => o[0]); return l.slice(1).map((t, i) => t - l[i]); };
+  const sd = (x) => { const m = x.reduce((a, b) => a + b) / x.length; return Math.sqrt(x.reduce((a, b) => a + (b - m) * (b - m), 0) / x.length) / m; };
+  const mean = (x) => x.reduce((a, b) => a + b) / x.length;
+  const plain = strokes(0, 0), jit = strokes(0, 0.5), rub = strokes(1, 0);
+  // slow drift: the mean period over successive 0.5 s windows moves
+  const win = []; let acc = 0, tt = 0, cnt = 0; for (const d of rub) { acc += d; cnt++; tt += d; if (tt >= 0.5) { win.push(acc / cnt); acc = 0; cnt = 0; tt = 0; } }
+  check('Jitter 0.5: strokes vary by about 15% but the average rate holds', Math.abs(sd(jit) - 0.15) < 0.04 && Math.abs(mean(jit) / mean(plain) - 1) < 0.02, `SD ${(sd(jit) * 100).toFixed(1)}%, mean ${(100 * (mean(jit) / mean(plain) - 1)).toFixed(2)}%`);
+  check('Rubato 1: the tempo drifts slowly (0.5 s windows differ)', sd(win) > 0.04 && sd(rub.slice(0, 20)) < 0.08, `window SD ${(sd(win) * 100).toFixed(1)}%`);
+}
+
+// ---------- aftertouch opens the opercula ----------
+{
+  const lv = (at) => { const e = new TymbalEngine(SR, 7); for (const [k, v] of Object.entries(Object.assign({}, CYCS, { aperture: 0 }))) e.setParam(k, v); e.setAftertouch(at); e.noteOn(60, 110); const L = new Float32Array(SR / 2), R = new Float32Array(SR / 2); e.process(L, R, L.length); let s = 0; for (let i = SR / 4; i < L.length; i++) s += L[i] * L[i]; return 10 * Math.log10(s); };
+  const shut = lv(0), open = lv(1);
+  check('aftertouch opens the opercula: louder by about 10 dB', open - shut > 7 && open - shut < 14, (open - shut).toFixed(1) + ' dB');
+}
+
+// ---------- song timing is buffer-size independent ----------
+{
+  const p = Object.assign({}, CASS_PHRASE, { rubato: 0.5, jitter: 0.3, phrase: 0.6, rest: 0.2, mode: 1 });
+  const notes = [[60, 100, 0, 0.7], [64, 90, 0.31, 0.9]];
+  const ref = render(1.0, p, { block: 1, notes }).L;
+  let same = true;
+  for (const bl of [64, 999]) { const x = render(1.0, p, { block: bl, notes }).L; for (let i = 0; i < x.length; i++) if (x[i] !== ref[i]) { same = false; break; } }
+  const p2 = Object.assign({}, CYCS, { drive: 1, burst: 3, jitter: 0.4, song: 1, echeme: 0.05, gap: 0.03, playmode: 1 });
+  for (const bl of [64, 999]) { const a = render(0.6, p2, { block: 1, notes }).L, b = render(0.6, p2, { block: bl, notes }).L; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) { same = false; break; } }
+  check('song, Rubato, Jitter, Async and Rate mode: same output at buffer sizes 1, 64, 999', same);
 }
 
 // ---------- every parameter in range at its default ----------

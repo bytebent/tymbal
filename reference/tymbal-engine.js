@@ -15,8 +15,14 @@
  * starts 7.5% low and rises over a few cycles (Bennet-Clark 1997: +150–350 Hz through the decay),
  * then merges into the tymbal's resonator, so the nonlinear start never pulls the pitch.
  *
- * Batch 03: two tymbals, Helmholtz and Open bodies, the lock, Carrier mode. Every parameter of the
- * design is in the table; the ones a later batch builds are accepted and ignored until then.
+ * A voice-level muscle clock issues the strokes: one cycle at a time, both tymbals (the second Lr
+ * phase into the cycle), shaped by the song (echemes, phrases with an intro and a fall), Rubato,
+ * Jitter and the drive (Sync: one command per stroke; Async: one per burst). In Carrier mode the
+ * note sets the carrier, in Rate mode the pulse rate.
+ *
+ * Batch 04: muscles, song and Rate mode on top of batch 03's two tymbals, Helmholtz and Open
+ * bodies and the lock. Every parameter of the design is in the table; the ones a later batch builds
+ * are accepted and ignored until then.
  *
  * Everything runs at 4× the host rate in fixed 32-sample blocks and is decimated with a
  * windowed-sinc FIR, as in Throat, Dolphin and Syrinx. process() never allocates. Same seed, same
@@ -59,6 +65,19 @@
   const CAVITY_RATIOS = [1.75, 2.1];   // weak model resonances near 7.5 and 9 kHz above 4.3 kHz
   const BODY_GAIN = 2.5;        // body output against the bare tymbal (tuned by level, see tests.md)
   const STIFF_DB = 9;           // click level from Stiffness 0 to 1 (louder when stiff), 0 dB at 0.6
+  // muscle and song
+  const CARRIER_OCT = 4;        // Carrier mode: the carrier is 4 octaves above the note (middle C → C8)
+  const RATE_MAX = 2000;        // strokes per second per tymbal, upper limit
+  const JITTER_SD = 0.3;        // per-stroke (and per-echeme) timing deviation at Jitter 1; clipped at ±2 SD
+  const RUBATO_SD = 0.2;        // slow tempo drift at Rubato 1 (log), new target each echeme/phrase or 0.3 s
+  const RUBATO_TAU = 0.2;       // s
+  const ASYNC_RUNDOWN = 0.6;    // Async: force falls by this share across a burst
+  const FALL_ST = 4;            // Fall 1: pitch drops 4 semitones …
+  const FALL_DB = 12;           // … and level 12 dB …
+  const FALL_SHARE = 0.3;       // … over the last 30% of the phrase
+  const INTRO_POW = 4;          // intro rate: Start^(1 − u⁴), low most of the intro, rising at its end
+  const ECHEME_BEATS = [16, 8, 4, 2, 1, 1 / 2, 1 / 3, 1 / 4, 1 / 6, 1 / 8, 1 / 12, 1 / 16, 1 / 24, 1 / 32];
+  const SONG_CONT = 0, SONG_ECHEME = 1, SONG_PHRASE = 2;
 
   // ids, defaults and ranges: the one table the C++ core and the UI copy.
   // log: the knob moves logarithmically; curve: knob position^curve; step: whole steps.
@@ -118,7 +137,7 @@
     { id: 'intro', def: 0, min: 0, max: 0.9 },
     { id: 'fall', def: 0, min: 0, max: 1 },
     { id: 'jitter', def: 0.03, min: 0, max: 1 },
-    { id: 'rubato', def: 0.1, min: 0, max: 1 },
+    { id: 'rubato', def: 0, min: 0, max: 1 },
     { id: 'sync', def: 0, min: 0, max: 1, step: 1 },
     // Scale (batch 06)
     { id: 'time', def: 1, min: 0.1, max: 32, log: true },
@@ -189,7 +208,8 @@
       this.weps = 0; this.wdec = 1; this.wleft = 0;
       this.om = 0; this.rr = 0; this.cr = 1; this.ci = 0;   // ω, r, r·cos ω, r·sin ω
       this.nEv = 0; this.iEv = 0;
-      this.nextStroke = Infinity;
+      this.nextStroke = Infinity;                // set by the voice's muscle clock
+      this.pendC = 1; this.pendF = 1;            // that stroke's cycle length and force
       this.state = 0;                            // ribs currently IN (0 = OUT)
       this.lastF = 0; this.lastQ = 0;
       this.strokes = 0; this.pk2 = 0;
@@ -208,8 +228,8 @@
     // queue one stroke starting at absolute time T0: ribs in, then the OUT click(s)
     stroke(T0) {
       const v = this.v, e = v.e;
-      const effort = v.effortNow;
-      const cycle = e.srOS / (e.rateNow * e.heatF);
+      const effort = v.effortNow * this.pendF;
+      const cycle = this.pendC;
       const ribs = e.ribs;
       const nWant = Math.max(1, Math.min(ribs, Math.round(e.recruit * Math.sqrt(effort))));
       const sp = e.spacingS / e.heatF, ld = e.leadS * e.leadF / e.heatF;
@@ -238,8 +258,9 @@
       if (t >= tEnd) t = Math.max(this.evT[n - 1] + 1, tEnd - 1);
       this.evT[n] = t; this.evKind[n] = EV_OUT; this.evRib[n] = 0; this.evA[n] = A * e.outGain; this.evDec[n] = 1; n++;
       this.nEv = n; this.iEv = 0;
-      this.nextStroke = T0 + cycle;
+      this.nextStroke = Infinity;
       this.strokes++;
+      if (e.onsets) e.onsets.push([T0 / e.srOS, this.side, A]);
     }
 
     // when this tymbal next needs attention: an IN rib is decided half a period before its moment
@@ -252,9 +273,9 @@
     // handle what is due; sNow = time of the last output sample, d = event time − sNow (0 < d ≤ 1)
     step(sNow, d) {
       const v = this.v;
-      if (this.iEv >= this.nEv) {                // a new stroke is due
+      if (this.iEv >= this.nEv) {                // a new stroke is due (late if the last one ran over)
         if (!v.muscleOn || !v.e.tymOn[this.side]) { this.nextStroke = Infinity; return; }
-        this.stroke(this.nextStroke);
+        this.stroke(Math.max(this.nextStroke, sNow + 1e-6));
         return;
       }
       const i = this.iEv;
@@ -286,7 +307,6 @@
       // its frequency starts KAPPA low and recovers over TRANS_CYC cycles
       const tau = TRANS_CYC * TWO_PI / this.om;
       this.weps = KAPPA * this.om; this.wdec = Math.exp(-1 / tau); this.wleft = Math.ceil(4 * tau);
-      if (e.onsets && kind === EV_IN && k === 1) e.onsets.push(this.side);
     }
 
     // run over [j0, j1) of the block: add the complex output to sRe/sIm, the panned real output to dL/dR
@@ -326,10 +346,13 @@
     reset() {
       this.rng = this.seed;
       this.stage = 0; this.env = 0; this.note = -1; this.held = false; this.vel = 1; this.age = 0;
-      this.logF = Math.log2(4186); this.glideLeft = 0; this.glideStep = 0;
+      this.logF = Math.log2(261.63); this.glideLeft = 0; this.glideStep = 0;   // the note (Carrier adds 4 octaves)
       this.effortNow = 0; this.muscleOn = false; this.fNow = 0;
       this.periodS = 1; this.halfT = 0;
       this.kc = 0; this.lockFrac = 0; this.omNote = 0;   // pitch keeper: correction (octaves), recent lock share
+      // muscle clock and song: next cycle, the current echeme or phrase (start, end of sound, end)
+      this.nextCycle = Infinity; this.uStart = 0; this.uOn = 0; this.uEnd = -Infinity; this.uFirst = true;
+      this.burstIdx = 0; this.burstJ = 1; this.rubF = 1; this.rubT = 1; this.rubLeft = 0; this.fallU = 0;
       // body: main mode b0 and two cavity modes, a low-pass, the peak the lock gate uses
       this.b0r = this.b0i = this.b1r = this.b1i = this.b2r = this.b2i = 0; this.lp = 0; this.pk2 = 0;
       this.om0 = 0; this.r0 = 0; this.c0r = 1; this.c0i = 0; this.g0 = 0;
@@ -348,7 +371,7 @@
 
     pitchTarget(note) {
       const m = this.e.m;
-      return Math.log2(440) + (note - 69 + 48 + m[PINDEX.transpose] + m[PINDEX.detune] / 100) / 12;
+      return Math.log2(440) + (note - 69 + m[PINDEX.transpose] + m[PINDEX.detune] / 100) / 12;
     }
     setTarget(note, glide) {
       const t = this.pitchTarget(note);
@@ -364,21 +387,20 @@
       this.vel = 0.2 + 0.8 * clamp(vel / 127, 0, 1);
       const fresh = this.stage === 0;
       this.stage = 1; this.held = true; this.age = ++e.ageCounter;
-      const T0 = e.osTimeBase, cycle = e.srOS / (e.rateNow * e.heatF);
+      const T0 = e.osTimeBase;
       if (fresh) {
         this.env = 0;
         for (const t of this.tym) t.reset();
         this.b0r = this.b0i = this.b1r = this.b1i = this.b2r = this.b2i = 0; this.lp = 0; this.pk2 = 0;
-        this.kc = 0; this.lockFrac = 0;
+        this.kc = 0; this.lockFrac = 0; this.rubF = this.rubT = 1; this.rubLeft = 0; this.fallU = 0;
         e.voicePitch(this);
         for (const t of this.tym) t.retune(e.outF, e.outQ);
       }
-      this.muscleOn = true;
-      // the left tymbal starts with the next block, the right one Lr phase of a cycle later
-      for (const t of this.tym) {
-        if (t.iEv < t.nEv || t.nextStroke !== Infinity) continue;
-        t.nextStroke = T0 + (t.side ? e.lrphase * cycle : 0);
+      // the muscle (re)starts with the next block, with a new echeme or phrase
+      if (!this.muscleOn || this.nextCycle === Infinity) {
+        this.nextCycle = T0; this.uEnd = -Infinity; this.burstIdx = 0;
       }
+      this.muscleOn = true;
     }
     release() { if (this.stage !== 0) { this.stage = 4; this.held = false; } }
 
@@ -391,6 +413,77 @@
       else if (this.stage === 4) { this.env *= Math.exp(-4 * dt / m[PINDEX.release]); }
       this.effortNow = this.env * this.vel;
       if (this.stage === 4 && this.effortNow < STOP_EFFORT) this.muscleOn = false;
+    }
+
+    // a new echeme or phrase starts at T: its length (Jitter and Rubato, or snapped to the beat with Sync)
+    newUnit(T) {
+      const e = this.e, sr = e.srOS;
+      let on, off;
+      if (e.song === SONG_ECHEME) { on = e.echemeT; off = e.gapT; } else { on = e.phraseT; off = e.restT; }
+      if (!e.sync) {
+        on *= this.rubF * this.jit(); off *= this.rubF;
+        this.rubT = Math.exp(e.rubato * RUBATO_SD * this.gauss());
+      }
+      this.uStart = T; this.uOn = T + Math.max(1, on * sr); this.uEnd = this.uOn + off * sr;
+      this.uFirst = true; this.burstIdx = 0;
+    }
+    gauss() { let s = this.rand(); s += this.rand(); s += this.rand(); s += this.rand(); return (s - 2) * 1.7320508; }
+    // a timing factor with Jitter: 1 ± 0.3·Jitter (one SD), clipped at two
+    jit() {
+      const sd = JITTER_SD * this.e.jitter;
+      return sd > 0 ? clamp(1 + sd * this.gauss(), 1 - 2 * sd, 1 + 2 * sd) : 1;
+    }
+    // where the phrase is (0–1 through its sound part), or −1 outside a phrase
+    phrasePos(T) {
+      if (this.e.song !== SONG_PHRASE || this.uEnd === -Infinity) return -1;
+      return (T - this.uStart) / (this.uOn - this.uStart);
+    }
+    // the note as a pulse rate (Rate mode) or carrier (Carrier mode), before the 4 octaves, in Hz
+    noteHz() {
+      const e = this.e;
+      return Math.pow(2, this.logF + e.bendOct - FALL_ST * e.fall * this.fallU / 12);
+    }
+
+    // the muscle clock: one cycle starts at T; issue both tymbals' strokes and schedule the next
+    cycleFire(T) {
+      const e = this.e;
+      if (!this.muscleOn) { this.nextCycle = Infinity; return; }
+      if (e.song !== SONG_CONT && T >= this.uEnd - 1e-6) this.newUnit(T);
+      // rate: the note (Rate mode) or the Rate knob with Heat (Carrier mode), the intro, Rubato
+      let hz = e.playmode === 1 ? this.noteHz() / (e.tymOn[0] && e.tymOn[1] ? 2 : 1) : e.rateNow * e.heatF;
+      const p = this.phrasePos(T);
+      if (p >= 0 && p < e.intro) hz *= Math.pow(e.start, 1 - Math.pow(p / e.intro, INTRO_POW));
+      hz = clamp(hz * this.rubF, 0.05, RATE_MAX);
+      let C = e.srOS / hz, force = 1;
+      if (e.drive === 1) {                       // Async: one command per burst, the force runs down
+        if (this.burstIdx === 0) this.burstJ = this.jit();
+        C *= this.burstJ;
+        force = 1 - ASYNC_RUNDOWN * this.burstIdx / Math.max(1, e.burst);
+        this.burstIdx = (this.burstIdx + 1) % e.burst;
+      } else C *= this.jit();
+      if (p >= 0) force *= dbToGain(-FALL_DB * e.fall * clamp((p - (1 - FALL_SHARE)) / FALL_SHARE, 0, 1));
+      // in an echeme or phrase, a stroke must fit before its sound part ends (the first always sounds)
+      if (e.song !== SONG_CONT && !this.uFirst && T + C > this.uOn + 1e-6) { this.nextCycle = Math.max(this.uEnd, T + 1); return; }
+      this.uFirst = false;
+      for (const t of this.tym) {
+        if (!e.tymOn[t.side]) continue;
+        t.nextStroke = T + (t.side && e.tymOn[0] ? e.lrphase * C : 0);
+        t.pendC = C; t.pendF = force;
+      }
+      this.nextCycle = T + C;
+    }
+
+    // once per block: Rubato drifts, the phrase position sets the fall
+    songBlock(t0) {
+      const e = this.e, dt = BLOCK / e.sr;
+      if (e.song === SONG_CONT && --this.rubLeft <= 0) {
+        this.rubT = Math.exp(e.rubato * RUBATO_SD * this.gauss());
+        this.rubLeft = Math.round(0.3 / dt);
+      }
+      if (e.rubato <= 0) this.rubT = 1;
+      this.rubF += (this.rubT - this.rubF) * (1 - Math.exp(-dt / RUBATO_TAU));
+      const p = this.phrasePos(t0);
+      this.fallU = p >= 0 ? clamp((p - (1 - FALL_SHARE)) / FALL_SHARE, 0, 1) : 0;
     }
 
     // the lock: move rib i of tymbal tym towards the next moment its click adds in phase with the
@@ -459,23 +552,24 @@
     render(nOS, oL, oR) {
       const e = this.e;
       if (this.glideLeft > 0) { this.logF += this.glideStep; this.glideLeft--; }
-      this.stepEnvelope();
-      e.voicePitch(this);
       const t0 = e.osTimeBase;
+      this.stepEnvelope();
+      this.songBlock(t0);
+      e.voicePitch(this);
       this.sRe.fill(0); this.sIm.fill(0); this.dL.fill(0); this.dR.fill(0);
-      // a tymbal switched back on by Pair starts with this block
-      for (const t of this.tym) if (this.muscleOn && e.tymOn[t.side] && t.iEv >= t.nEv && t.nextStroke === Infinity) t.nextStroke = t0;
       const s0r = this.b0r, s0i = this.b0i;
       let j = 0;
       for (;;) {
-        let tb = Infinity, which = null;
+        // the muscle clock first on a tie, so a stroke it issues can start at the same moment
+        let tb = this.muscleOn ? this.nextCycle : Infinity, which = null;
         for (const t of this.tym) { const x = t.nextTime(); if (x < tb) { tb = x; which = t; } }
         const rel = tb - t0;
         if (rel >= nOS) { this.run(j, nOS, oL, oR); break; }
         const upto = Math.min(nOS, Math.max(j, Math.ceil(rel)));
         if (upto > j) { this.run(j, upto, oL, oR); j = upto; }
         if (j >= nOS) break;
-        which.step(t0 + j - 1, clamp(rel - (j - 1), 1e-9, 1));
+        if (which) which.step(t0 + j - 1, clamp(rel - (j - 1), 1e-9, 1));
+        else this.cycleFire(tb);
       }
       this.keep(s0r, s0i, nOS);
       // done: the muscle has stopped and everything has rung out
@@ -503,7 +597,7 @@
       this.panL = new Float64Array(2); this.panR = new Float64Array(2); this.tymOn = new Uint8Array(2);
       this.ageCounter = 0; this.quietBlocks = 0;
       this.stack = [];
-      this.bendNorm = 0; this.tempo = 120;
+      this.bendNorm = 0; this.tempo = 120; this.aftertouch = 0;
       this.dc = { xl: 0, yl: 0, xr: 0, yr: 0, R: 1 - 2 * Math.PI * 10 / sampleRate };
       this.osTimeBase = 0; this.onsets = null;
       this.stats = { ins: 0, locked: 0 };
@@ -528,6 +622,7 @@
     getParam(id) { return this.p[PINDEX[id]]; }
     setBend(norm) { this.bendNorm = clamp(norm, -1, 1); }
     setTempo(bpm) { this.tempo = clamp(bpm, 20, 400); }
+    setAftertouch(norm) { this.aftertouch = clamp(norm, 0, 1); }   // opens the opercula from Aperture towards 1
 
     noteOn(note, vel) {
       if (vel <= 0) { this.noteOff(note); return; }
@@ -568,6 +663,26 @@
       const P = this.m;
       this.heatF = Math.pow(HEAT_BASE, (P[PINDEX.heat] - 30) / 15);
       this.rateNow = P[PINDEX.rate];
+      this.playmode = Math.round(P[PINDEX.playmode]);
+      this.drive = Math.round(P[PINDEX.drive]);
+      this.burst = Math.round(P[PINDEX.burst]);
+      // song: lengths in seconds; Sync snaps an echeme period to a beat division, a phrase period to
+      // whole beats in powers of two, keeping the sound share
+      this.song = Math.round(P[PINDEX.song]);
+      this.sync = P[PINDEX.sync] >= 0.5;
+      this.jitter = P[PINDEX.jitter]; this.rubato = P[PINDEX.rubato];
+      this.start = P[PINDEX.start]; this.intro = P[PINDEX.intro]; this.fall = P[PINDEX.fall];
+      let eOn = P[PINDEX.echeme], eOff = P[PINDEX.gap], pOn = P[PINDEX.phrase], pOff = P[PINDEX.rest];
+      if (this.sync) {
+        const beat = 60 / this.tempo;
+        const want = (eOn + eOff) / beat;
+        let best = ECHEME_BEATS[0], bd = Infinity;
+        for (const b of ECHEME_BEATS) { const d = Math.abs(Math.log(b / want)); if (d < bd) { bd = d; best = b; } }
+        const ke = best / want; eOn *= ke; eOff *= ke;
+        const pb = Math.pow(2, clamp(Math.round(Math.log2((pOn + pOff) / beat)), 0, 6));
+        const kp = pb / ((pOn + pOff) / beat); pOn *= kp; pOff *= kp;
+      }
+      this.echemeT = eOn; this.gapT = eOff; this.phraseT = pOn; this.restT = pOff;
       this.hold = P[PINDEX.hold];
       this.ribs = Math.round(P[PINDEX.ribs]);
       this.recruit = Math.min(this.ribs, Math.round(P[PINDEX.recruit]));
@@ -609,7 +724,9 @@
     // later ribs fall along tilt·u²; Q follows 1/f) and its body's coefficients
     voicePitch(v) {
       const P = this.m;
-      let f = Math.pow(2, v.logF + this.bendOct);
+      // Carrier mode: the note, 4 octaves up; Rate mode: the Carrier knob. Fall lowers it near a phrase's end.
+      let f = this.playmode === 1 ? P[PINDEX.carrier] * Math.pow(2, -FALL_ST * this.fall * v.fallU / 12)
+        : v.noteHz() * Math.pow(2, CARRIER_OCT);
       while (f > F_CAP) f *= 0.5;
       if (f < F_MIN) f = F_MIN;
       this.fCarrier = f;
@@ -623,7 +740,7 @@
       this.outF = ft * P[PINDEX.outratio];
       this.outQ = q0 * ft / this.outF;
       // Helmholtz body: Aperture moves pitch, Q and level as the opercula do; Membrane raises Q
-      const ap = P[PINDEX.aperture], mem = P[PINDEX.membrane];
+      const ap0 = P[PINDEX.aperture], ap = ap0 + (1 - ap0) * this.aftertouch, mem = P[PINDEX.membrane];
       const fb = f * Math.pow(AP_F_CLOSED, 1 - ap);
       const qb = P[PINDEX.bodyq] * (AP_Q_CLOSED + (1 - AP_Q_CLOSED) * ap) * (1 + MEMBRANE_Q * mem);
       v.periodS = this.srOS / fb;
@@ -699,7 +816,7 @@
 
   TymbalEngine.BLOCK = BLOCK; TymbalEngine.OS = OS;
   TymbalEngine.toNorm = toNorm; TymbalEngine.fromNorm = fromNorm;
-  const core = { CLICK_PHASE, KAPPA, TRANS_CYC, TRANS_LAG, LOCK_AIM, A_REF, HEAT_BASE, OUTRIB_DB, LOCK_GATE, BODY_GAIN, AP_F_CLOSED, AP_Q_CLOSED, AP_DB_CLOSED };
+  const core = { CARRIER_OCT, JITTER_SD, RUBATO_SD, ASYNC_RUNDOWN, FALL_ST, FALL_DB, FALL_SHARE, INTRO_POW, CLICK_PHASE, KAPPA, TRANS_CYC, TRANS_LAG, LOCK_AIM, A_REF, HEAT_BASE, OUTRIB_DB, LOCK_GATE, BODY_GAIN, AP_F_CLOSED, AP_Q_CLOSED, AP_DB_CLOSED };
   if (typeof module !== 'undefined' && module.exports) module.exports = { TymbalEngine, PARAMS, core };
   else root.TymbalEngine = TymbalEngine;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

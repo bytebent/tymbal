@@ -11,12 +11,14 @@ the periodical cicada *Magicicada septendecim* sings. Most of the sound lives be
 
 Unlike Throat and mouth-tube or Syrinx and beak-tube, the source and the body are one plugin.
 
-Status: **prototype, batch 03 of 11**. The reference engine has two tymbals whose ribs buckle one
+Status: **prototype, batch 04 of 11**. The reference engine has two tymbals whose ribs buckle one
 by one and retune them, matching *Cyclochila*'s measured ribs (Bennet-Clark 1997) within 1% and
 1 dB, and a body they drive. The lock lets the body's ringing time each rib: a slack
 *Magicicada septendecim* sings an unbroken Q 25 tone, in tune within a cent, and turns pulsed when
-made stiff. Next: the muscles and song patterns, then the moths and hoppers, the bladder body,
-the bench, the C++ port and the JUCE plugin.
+made stiff. One muscle clock per voice sings echemes and phrases (*M. cassini*'s ticks breaking
+into a buzz, *Cicada orni*'s echemes, *Cystosoma*'s bimodal pulses), Sync or Async, and in Rate
+mode the note sets the pulse rate. Next: the cost benchmark, then the moths and hoppers, the
+bladder body, the bench, the C++ port and the JUCE plugin.
 
 ## Try it
 

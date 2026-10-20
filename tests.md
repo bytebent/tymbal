@@ -3,7 +3,61 @@
 Quick results per batch: tests, experiments and pictures. Pictures live in `docs/tests/`. Run the
 tests with `node tests/engine-test.js`.
 
-**Now: 49 engine tests passing** (about 0.7 s).
+**Now: 72 engine tests passing** (about 2 s).
+
+## Batch 04 · muscles and song
+
+How it is built:
+
+- One muscle clock per voice: each cycle strokes the left tymbal, then the right one Lr phase into
+  the same cycle. It carries the song (echemes and phrases with their intro and fall), Rubato,
+  Jitter and the drive. Before, each tymbal kept its own clock.
+- Rate mode: the note sets the stroke rate (each tymbal at half the note when both alternate);
+  the body sits at the Carrier knob.
+- Async: one command per burst; even cycles inside it, force running down 60% across it.
+- Aftertouch opens the opercula.
+- Rubato's default is now 0: in Rate mode it bends the pitch.
+
+Experiments:
+
+- *Cystosoma* gave a two-step rise, not two humps: the preset timed its ribs like the
+  muscle-stimulated preparation (rib 2 4–6 ms after rib 1). In calling song (Fig. 12 of
+  Bennet-Clark & Young 1998) the leading tymbal's ribs 2–3 follow two cycles after rib 1, and the
+  dip comes when the trailing tymbal's out-of-tune rib 1 lands on the ringing abdomen. With Lead
+  1.7 ms, rib 1 +5 st at full level and Stiffness 0.4, 68 of 69 pulses are bimodal (dip to about
+  70%). Looser (Stiffness 0.5–0.6) only 70–85% are.
+- Rate mode measured 14 cents flat at Heat 38 °C. The stroke clock was exact (261.626 /s at every
+  temperature); at 38 °C the ribs sit closer and 617 of 779 lock, and locked ribs snap to the
+  4.3 kHz carrier's phase grid, so each pulse lands up to half a carrier period off. The test now
+  checks the stroke clock, and the sound with the lock off. For playing tunes, a stiffer tymbal
+  keeps pulses even (open for the listening round).
+
+Tests:
+
+| What | Paper | Engine |
+|---|---|---|
+| *Cystosoma*: second tymbal late | 5–7 ms (a quarter cycle) | 6.05–6.41 ms ✓ |
+| *Cystosoma*: bimodal pulses | two humps, 20–23 ms | 68 of 69 pulses bimodal, humps a median 5.5 ms apart; median 24.5 ms above 10% of the peak ✓ |
+| *M. cassini* phrase | 15–30 pulses/s, then 170–200 | 22.9 /s, then 180 /s; silent rest; the next phrase starts slow again ✓ |
+| *C. orni* echemes | 84–116 ms, gaps 84–93 ms, 4.7 /s | 87–112 ms, gaps 82–91 ms, 5.4 /s ✓ |
+| *M. septendecim* phrase end | drop in level and pitch | Fall 1: −374 cents (target 4 st), −14.5 dB ✓ |
+
+Also: an echeme shorter than a cycle sounds one stroke (Ticks) ✓; Rate mode within 0.05 cents of
+the note at C3, C4 and G4, body at the Carrier knob, Heat leaves the rate alone, one tymbal runs at
+the note, default Jitter within 2.6 cents on average ✓; Async force 1, 0.85, 0.7, 0.55 per burst ✓;
+Sync at 120 bpm snaps a 0.188 s echeme period to a third of a beat, ignoring Rubato ✓; Jitter 0.5
+varies strokes by 14.5% while the average holds within 0.7% ✓; Rubato 1 drifts the tempo (0.5 s
+windows differ by 12%) ✓; aftertouch +11.9 dB from shut opercula ✓; same output at buffer sizes 1,
+64 and 999 with phrases, Rubato, Jitter, Async and Rate mode ✓.
+
+Closed from batch 02: *M. cassini*'s strokes overlap in the buzz. Young & Josephson's myograms
+show the muscles alternating strictly at 90 Hz in the final portion (pulses 5.5 ms apart), and
+each compound pulse lasts about 9 ms, so the two tymbals' pulses overlap there; each still fits its
+own 11.1 ms cycle. The engine keeps that.
+
+Renders, 2–6% of real time each:
+
+![song](docs/tests/04-song.png)
 
 ## Batch 03 · body and lock
 
@@ -59,6 +113,7 @@ major determinant of song frequency.
 
 Still open from batch 02: *M. cassini*'s two tymbals at 90 Hz each give strokes 5.5 ms apart, and
 9 sub-pulses take about 9 ms, so with both tymbals the strokes overlap. Preset 04 plays both.
+(Closed in batch 04.)
 
 Renders, 2–5% of real time each:
 

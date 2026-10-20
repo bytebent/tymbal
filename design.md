@@ -250,7 +250,10 @@ their batches, Bladder sounds as Helmholtz and Plant as Open.
 
 ## 6. Muscles
 
-Each tymbal has its own muscle clock. [Proposed]
+One muscle clock per voice drives both tymbals: each cycle it strokes the left tymbal, then the
+right one `lrphase` into the same cycle, so Jitter and Rubato move both together and the phase
+between them holds. A stroke that would start before the tymbal has finished its last one (its
+OUT click) waits for it. [Decided, batch 04]
 
 - `rate`: muscle cycles per second per tymbal, 1–600 Hz. *Cyclochila* about 117 (234 pulses/s
   with two tymbals alternating), *M. cassini* 90 (180 pulses/s), *M. septendecim* 68 (136),
@@ -264,19 +267,24 @@ Each tymbal has its own muscle clock. [Proposed]
   to 6 dB.
 - `hold`: when in the cycle the muscle relaxes and the OUT click fires, as a share of the cycle.
   Default 0.5, so OUT lands with the other side's IN.
-- `drive`: **Sync** (one nerve impulse, one stroke; per-stroke rubato and jitter) or **Async**
-  (one command sets off a burst of `burst` in-out cycles at the tymbal's own rate, as
-  *Platypleura*'s fibrillar-type muscle is thought to). *Platypleura*'s asynchrony is inferred,
-  not shown, and a 2017 study of a relative found flight-muscle structure. [Proposed]
+- `drive`: **Sync** (one nerve impulse, one stroke; Jitter on every stroke) or **Async** (one
+  command sets off a burst of `burst` in-out cycles at the tymbal's own rate, as *Platypleura*'s
+  fibrillar-type muscle is thought to). *Platypleura*'s asynchrony is inferred, not shown, and a
+  2017 study of a relative found flight-muscle structure. In the engine a command comes every
+  `burst` cycles; inside a burst the cycles are exactly even (Jitter moves whole bursts) and the
+  force runs down by 60% across the burst (1, 0.85, 0.7, 0.55 at Burst 4), a muscle oscillation
+  dying away until the next nerve impulse restarts it. Successive commands keep it going.
+  [Decided, batch 04; the run-down is an estimate]
 - **Heat** (`heat`, 20–40 °C, default 30): muscles speed up with temperature, the carrier does
   not. *M. cassini*'s sub-pulse rate goes from about 650 Hz at 20 °C to 1200 Hz at 35 °C while
   its 6 kHz carrier stays put; twitch rise time falls from 7.6 to 5.2 ms. Heat scales `rate`,
-  `spacing`, `lead` and `hold`. [Proposed]
+  `spacing` and `lead` by 1.846^((T − 30)/15) (Hold is a share of the cycle, so it follows). In
+  Rate mode Heat leaves the rate alone, since the note sets it. [Decided, batch 04]
 
 ## 7. Play modes
 
 **Carrier** (default) [Decided]: the note sets the body's carrier. The tymbal follows through
-`tune`. A fixed +4 octaves puts middle C at about 4.2 kHz (*Cyclochila* territory); `transpose`
+`tune`. A fixed +4 octaves puts middle C at C8, 4186 Hz (*Cyclochila*'s rib 2); `transpose`
 moves it. The muscle runs at `rate`.
 
 **Rate** [Decided]: the note sets the heard pulse rate, which becomes the pitch, as in
@@ -284,18 +292,27 @@ leafhopper "pure-tone" vibrational signals whose frequency rises with temperatur
 follows muscle rate rather than a resonance (Tishechkin 2013, via the brief). The body stays at
 `carrier` (default 4.3 kHz), so the carrier becomes a formant-like colour over a buzz. With the
 tymbals alternating (`lrphase` 0.5) each tymbal runs at half the note; at other phases the
-two-tymbal pattern repeats at half the note too, which adds a sub-octave colour. Middle C is
-about 262 pulses/s, close to *Cyclochila*'s 234. [Proposed]
+two-tymbal pattern repeats at half the note too, which adds a sub-octave colour (and at 0, with
+both firing together, the pitch drops an octave). With one tymbal (Pair) it runs at the note.
+Middle C is 262 pulses/s, close to *Cyclochila*'s 234. Pitch bend, glide and Fall move the rate.
+[Decided, batch 04]
+
+Measured (batch 04): the stroke clock is exact (within 0.05 cent of the note across C3–G4). Ribs
+that lock snap to the carrier's phase grid, which moves each pulse by up to half a carrier period;
+when many ribs lock (slack tymbal, short spacing) this roughens the pulse timing and can shift the
+heard pitch by some cents. A stiffer tymbal (0.8 in the melody preset) keeps pulses even.
+[Open: listening round]
 
 A Trigger mode (each note one stroke or phrase, for drums) can be added after the listening
 round. [Open]
 
 Common: Mono or Poly (8 voices) [Proposed, after the cost batch], glide, bend range, detune.
-Velocity sets effort (level and recruitment); aftertouch moves Aperture. [Proposed]
+Velocity sets effort (level and recruitment); aftertouch opens Aperture from its setting towards
+fully open (+10 dB from shut). [Decided, batch 04]
 
 ## 8. Song
 
-A held key sings. `song` [Proposed]:
+A held key sings. `song` [Decided, batch 04]:
 
 | Song | What a key does | Example |
 |---|---|---|
@@ -303,12 +320,21 @@ A held key sings. `song` [Proposed]:
 | Echeme | Groups of strokes: `echeme` on, `gap` off | *Cicada orni*: echemes 84–116 ms, gaps 84–93 ms |
 | Phrase | `phrase` seconds of song, `rest` silence; the rate can start low and the end can fall | *M. cassini*: 15–30 Hz then 170–200 Hz; *M. septendecim*: 2–3 s phrases with a drop in level and pitch at the end, about 1 s apart, about three times |
 
+- A stroke sounds in an echeme or phrase only if its whole cycle fits before the sound part ends,
+  except the first, which always sounds.
 - `start` and `intro`: the starting rate as a share of `rate`, and how much of the phrase it
-  lasts.
-- `fall`: the drop in level and carrier over the end of a phrase. Size of the pitch drop: [Open],
-  by ear.
-- `jitter` and `rubato`: seeded variation per stroke and per echeme. `sync` ties echemes and
-  phrases to tempo.
+  lasts. Through the intro the rate is Start^(1 − u⁴): it stays near Start, then rises steeply at
+  the intro's end, as *M. cassini*'s ticks break into the buzz. [Proposed]
+- `fall`: over the last 30% of a phrase, level drops up to 12 dB and pitch up to 4 semitones
+  (Fall 1), the carrier in Carrier mode, the rate in Rate mode. [Proposed: by ear]
+- `jitter`: each stroke's cycle (and each echeme's length) varies by 0.3 × Jitter (one standard
+  deviation, clipped at two). The average rate holds.
+- `rubato`: a slow tempo drift (up to 20% at 1, one standard deviation) on rate, echemes and
+  phrases, with a new target for each echeme or phrase (every 0.3 s in Continuous) and a 0.2 s
+  glide. Default 0, since in Rate mode it bends the pitch. [Decided, batch 04]
+- `sync`: echeme period (echeme + gap) snaps to the nearest of 16 bars … 1/32 beat, a phrase
+  period (phrase + rest) to 1–64 beats in powers of two, keeping the sound share. Jitter and
+  Rubato no longer move echemes and phrases. No host position yet: the grid starts at the note.
 - Ticks (isolated strokes) are Echeme with one stroke per echeme.
 
 ## 9. Families and hearing range
@@ -404,7 +430,7 @@ nature. LFOs: [Open], decided after the listening round, as in Syrinx.
 | | `intro` | 0–0.9 | 0 | Share of the phrase at the starting rate |
 | | `fall` | 0–1 | 0 | Drop in level and pitch at the phrase end |
 | | `jitter` | 0–1 | 0.03 | Per-stroke timing variation |
-| | `rubato` | 0–1 | 0.1 | Slow timing drift |
+| | `rubato` | 0–1 | 0 | Slow timing drift |
 | | `sync` | Off, On | Off | Song times from tempo |
 | Scale | `time` | ×0.1–×32, log | ×1 | Stretches all timing |
 | | `link` | 0–1 | 0 | Timing follows the note like tape |
