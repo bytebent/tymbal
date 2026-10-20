@@ -3,7 +3,36 @@
 Quick results per batch: tests, experiments and pictures. Pictures live in `docs/tests/`. Run the
 tests with `node tests/engine-test.js`.
 
-**Now: 87 engine tests passing** (about 11 s). Benchmark: `node tools/perf.js`.
+**Now: 94 engine tests passing** (about 12 s). Benchmark: `node tools/perf.js`.
+
+## Batch 07 · bladder
+
+How it is built: three panels (both sides of tergites 3–5 and the sternites), each a complex
+one-pole driven by both tymbals and sharing the air sac's pitch. Extend sets pitch, Q and level;
+Split detunes the side panels ±1 semitone; the sides sit left and right with Spread, the sternites
+in the centre at 0.58. Chorus moved to batch 08.5.
+
+Experiments:
+
+- A plain ×2 level from rest to extension gave only ×1.36 with a five-cycle burst at resonance (the
+  paper's drive): the low-Q panel rings up faster on a short burst. The rest level is now 0.34.
+- Q read 7.8 instead of 9 with a broadband click, for the Helmholtz body as well. Cycle by cycle the
+  first ten cycles fall by 0.71 each (Q 9.2, 849–850 Hz); below about −60 dB a slow offset from
+  the 10 Hz DC blocker moves the zero crossings. The tests read the decay while it is above 2% of
+  the peak.
+
+| What | Paper (Bennet-Clark & Young 1998) | Engine |
+|---|---|---|
+| Q, rest → extended | 4 → 9 | 4.0 → 8.9 ✓ |
+| Pitch, rest → extended | 815 → 900 Hz (×1.104) | 770 → 849 Hz (×1.103) ✓ |
+| Level of a five-cycle burst | doubles | ×2.00 ✓ |
+| *Cystosoma* pulses on its own body | bimodal | 68 of 69 ✓ |
+
+Also: Split 1 makes the panels beat (the envelope rises ×5 after a null; without Split it only
+decays) ✓; Spread places the sides left and right (side energy 11.6% of mid at Spread 1, none at
+0) ✓; same output at buffer sizes 1, 64 and 999 ✓.
+
+![bladder](docs/tests/07-bladder.png)
 
 ## Batch 06 · moths and hoppers
 

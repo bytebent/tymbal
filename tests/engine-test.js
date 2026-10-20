@@ -748,6 +748,60 @@ const playPreset = (pr, seconds, opts) => songRun(Object.assign({}, pr.params, (
   check('Plant, Time and Link: same output at buffer sizes 1, 64, 999', same);
 }
 
+// ================= batch 07: the Bladder body =================
+{
+  // one click into the abdomen (Bennet-Clark & Young 1998 drove it with an internal sound source);
+  // `tq` 5 is about a five-cycle burst at resonance, 2 a broadband click
+  const bladder = (extend, tq, extra) => {
+    const p = Object.assign(placeAt(850), { body: 1, bodyq: 9, extend, ribs: 1, recruit: 1, rate: 2, tymbalq: tq, outlevel: -40, pair: 1, stiffness: 1, scatter: 0, jitter: 0, direct: 0, attack: 0.001, sustain: 1, spread: 0 }, extra || {});
+    const { L, R } = songRun(p, 0.12, { vel: 127 });
+    let pk = 0, pi = 0; for (let i = 0; i < L.length; i++) if (Math.abs(L[i]) > pk) { pk = Math.abs(L[i]); pi = i; }
+    // decay: from cycle 1 after the peak while above 2% of it (lower, the DC blocker's slow tail moves the crossings)
+    const zc = []; for (let i = pi; i < L.length - 1 && zc.length < 14; i++) if (L[i] <= 0 && L[i + 1] > 0) zc.push(i + L[i] / (L[i] - L[i + 1]));
+    const peaks = []; let last = 1;
+    for (let c = 1; c + 1 < zc.length && c < 12; c++) { let m = 0; for (let i = Math.floor(zc[c]); i < zc[c + 1]; i++) m = Math.max(m, L[i]); if (m < 0.02 * pk) break; peaks.push(m); last = c + 1; }
+    let sx = 0, sy = 0, sxx = 0, sxy = 0; peaks.forEach((v, i) => { const y = Math.log(v); sx += i; sy += y; sxx += i * i; sxy += i * y; });
+    const k = peaks.length, slope = (k * sxy - sx * sy) / (k * sxx - sx * sx);
+    return { pk, Q: Math.PI / -slope, f: SR * (last - 1) / (zc[last] - zc[1]), L, R };
+  };
+  const r0 = bladder(0, 2), r1 = bladder(1, 2), b0 = bladder(0, 5), b1 = bladder(1, 5);
+  check('Bladder: extending the abdomen raises Q from about 4 to 9', Math.abs(r0.Q - 4) < 0.6 && Math.abs(r1.Q - 9) < 0.8, `Q ${r0.Q.toFixed(1)} → ${r1.Q.toFixed(1)}`);
+  check('Bladder: and the pitch from 815 to 900 Hz (×1.10)', Math.abs(r1.f / r0.f - 900 / 815) < 0.01, `${r0.f.toFixed(0)} → ${r1.f.toFixed(0)} Hz, ×${(r1.f / r0.f).toFixed(3)}`);
+  check('Bladder: and doubles the level of a five-cycle burst', Math.abs(b1.pk / b0.pk - 2) < 0.1, `×${(b1.pk / b0.pk).toFixed(2)}`);
+  // Split detunes the side panels: with the abdomen ringing the panels beat against each other
+  // a beat: the envelope falls into a null and rises again; a single resonance only decays
+  const env = (x) => { const { pk } = cyclePeaks(x, 0, x.length); return pk; };
+  const plain = bladder(1, 2, { bodyq: 20 }), split = bladder(1, 2, { bodyq: 20, split: 1 });
+  const rebound = (pk) => { const i0 = pk.indexOf(Math.max(...pk)); let best = 0; for (let i = i0; i < i0 + 40 && i < pk.length - 1; i++) best = Math.max(best, Math.max(...pk.slice(i + 1, i + 30)) / pk[i]); return best; };
+  check('Split: the panels ring apart and beat (Q 20, Split 1: ±1 semitone)', rebound(env(split.L)) > 1.5 && rebound(env(plain.L)) < 1.05,
+    `envelope rises again by ×${rebound(env(split.L)).toFixed(1)} after a null with Split, ×${rebound(env(plain.L)).toFixed(2)} without`);
+  // stereo: the side panels left and right, the sternites in the centre
+  const wide = bladder(1, 2, { spread: 1, split: 1 });
+  let dLR = 0, s2 = 0; for (let i = 0; i < wide.L.length; i++) { dLR += (wide.L[i] - wide.R[i]) ** 2; s2 += (wide.L[i] + wide.R[i]) ** 2; }
+  let dN = 0; for (let i = 0; i < r1.L.length; i++) dN = Math.max(dN, Math.abs(r1.L[i] - r1.R[i]));
+  check('Bladder: with Spread the two sides sit left and right; at Spread 0 the panels are centred', dLR / s2 > 0.05 && dN < 1e-9, `side/mid energy ${(dLR / s2 * 100).toFixed(1)}% at Spread 1, max L−R ${dN.toExponential(1)} at 0`);
+}
+{
+  // Cystosoma through its own body: still bimodal pulses
+  const { L, e } = songRun(Object.assign({}, CYSTO, { body: 1, jitter: 0.03, rubato: 0.1 }), 2.0);
+  const left = e.onsets.filter(o => o[1] === 0 && o[0] > 0.2 && o[0] < 1.9);
+  let bimodal = 0;
+  for (const [t] of left) {
+    const a = Math.round(t * SR) + DELAY, ev = stepEnv(L, a, a + Math.round(0.025 * SR), SR / 2000);
+    const top = Math.max(...ev), iMax = ev.indexOf(top);
+    for (let i = 0; i < iMax - 6; i++) { const between = Math.min(...ev.slice(i + 1, iMax)); if (ev[i] >= between * 1.15) { bimodal++; break; } }
+  }
+  check('Cystosoma on the Bladder body: bimodal pulses still', bimodal >= 0.9 * left.length, `${bimodal} of ${left.length} pulses`);
+}
+{
+  const p = Object.assign({}, CYSTO, { body: 1, split: 0.5, spread: 0.8, extend: 0.6, mode: 1 });
+  const notes = [[60, 100, 0, 0.5], [63, 90, 0.21, 0.8]];
+  const ref = render(0.9, p, { block: 1, notes }).L;
+  let same = true;
+  for (const bl of [64, 999]) { const x = render(0.9, p, { block: bl, notes }).L; for (let i = 0; i < x.length; i++) if (x[i] !== ref[i]) { same = false; break; } }
+  check('Bladder: same output at buffer sizes 1, 64, 999', same);
+}
+
 // ---------- every parameter in range at its default ----------
 check('parameter table: defaults inside their ranges', PARAMS.every(p => p.def >= p.min && p.def <= p.max), PARAMS.length + ' parameters');
 

@@ -217,10 +217,18 @@ confirmed by Bennet-Clark & Young 1998).
   (39–42 mm) doubles the amplitude and raises Q from 4 to 9. The frequency rises slightly too
   (815 Hz at 34 mm, 900 Hz at 41 mm), the opposite of what the larger volume alone would do.
 - **Split** (`split`): the panels are loosely coupled through the shared sac. Loading one side
-  let each region ring at its own frequency, so Split detunes the three panels for beating and
-  double peaks. [Proposed]
-- The left and right panels radiate in phase; the engine places them left and right in stereo,
-  with the ventral panel (10 dB quieter, about three times the area) in the centre. [Proposed]
+  let each region ring at its own frequency, so Split detunes the side panels for beating and
+  double peaks: the left one up to +1 semitone, the right one down, the sternites stay put.
+- The left and right panels radiate in phase; the engine places them left and right in stereo
+  (±0.4 × Spread from the centre), with the ventral panel (10 dB quieter per area, about three
+  times the area: √(1/3) ≈ 0.58 in amplitude) in the centre.
+
+How it is built [Decided, batch 07]: three complex one-poles, one per panel, all driven by both
+tymbals. Extend sets pitch × (815/900)^(1 − Extend), Q = Body Q × (4/9 + 5/9 × Extend) and level
+× (0.34 + 0.66 × Extend). The level factor is set so that the response to a five-cycle burst at
+resonance doubles, as measured: a low-Q panel rings up faster on a short burst, so a plain ×2 gave
+only ×1.36. The lock and the pitch keeper follow the left panel. Preset Body Q 9 gives the
+measured Q 4 → 9.
 
 **Open.** The tymbal resonator goes straight out. In *T. gastrica* the tymbal, eardrums and body
 wall all radiate, and the cavity does not act as a Helmholtz resonator. Moths have no body
@@ -388,7 +396,7 @@ Hopper presets need no time scaling; their low carriers sit where the note puts 
 
 Cicadas sing in choruses that synchronise or alternate: *M. cassini* choruses pulse every about
 5 s, faster and more synchronised in bright light; *Tibicina haematodes* males compete to call
-first and last. [Proposed, later batch]
+first and last. [Proposed, batch 08.5, after the bench: Decided]
 
 - Voices in Poly, and krill creatures, can be coupled: a voice's phrase onset nudges the others'
   phrase phase (`coupling`), Sync pulls them together, Alternate pushes them apart. `chorus`:

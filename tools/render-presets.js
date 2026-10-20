@@ -38,7 +38,8 @@ for (const pr of PRESETS) {
   for (let i = 0; i < n;) {
     while (k < ev.length && ev[k][0] <= i) { if (ev[k][1] === 'on') e.noteOn(ev[k][2], 100); else e.noteOff(ev[k][2]); k++; }
     if (pr.switchAt && !switched && i >= pr.switchAt.time * SR) { e.setParam(pr.switchAt.id, pr.switchAt.value); switched = true; }
-    let m = Math.min(BL, n - i);
+    if (pr.sweep) { const w = pr.sweep, u = Math.min(1, Math.max(0, (i / SR - w.start) / (w.end - w.start))); e.setParam(w.id, w.from + (w.to - w.from) * u); }
+    let m = Math.min(pr.sweep ? 32 : BL, n - i);
     if (k < ev.length) m = Math.min(m, ev[k][0] - i);
     e.process(tl, tr, m);
     L.set(tl.subarray(0, m), i); R.set(tr.subarray(0, m), i);

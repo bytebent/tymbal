@@ -25,9 +25,12 @@
  * resonator stays within 20 Hz–16 kHz. The Plant body carries hopper signals through a stem:
  * dispersion (low frequencies arrive late), then three bending modes.
  *
- * Batch 06: moths, hoppers, Time, Link, the guard and the Plant body, on top of the muscles, song,
- * Rate mode, two tymbals, Helmholtz and Open bodies and the lock. Every parameter of the design is
- * in the table; the ones a later batch builds (Bladder, Chorus) are accepted and ignored until then.
+ * The Bladder body (bladder cicadas) is one air sac shared by three thin panels that radiate in
+ * phase: both sides of tergites 3–5, left and right, and the sternites in the centre.
+ *
+ * Batch 07: the Bladder body, on top of the moths, hoppers, Time, Link, the guard, the Plant body,
+ * the muscles, song, Rate mode, two tymbals, Helmholtz and Open bodies and the lock. Every
+ * parameter of the design is in the table; Chorus (batch 08.5) is accepted and ignored until then.
  *
  * Everything runs at 4× the host rate in fixed 32-sample blocks and is decimated with a
  * windowed-sinc FIR, as in Throat, Dolphin and Syrinx. process() never allocates. Same seed, same
@@ -91,6 +94,13 @@
   const STEM_DIRECT = 0.35;     // the dispersed wave itself, beside the stem's resonances
   const PLANT_GAIN = 3;         // Plant output against the bare tymbal (set by level, see tests.md)
   const CONTACT_HZ = 40;        // contact colour: a first-order high-pass
+  // Bladder body (Bennet-Clark & Young 1998): abdomen extended 32–34 → 39–42 mm
+  const BL_F_REST = 815 / 900;  // pitch at rest against full extension
+  const BL_Q_REST = 4 / 9;      // Q at rest against full extension
+  const BL_LVL_REST = 0.34;     // level at rest against full extension: the response to a five-cycle burst doubles
+  const BL_VENTRAL = 0.58;      // sternites: 10 dB below the tergites per area, about 3× the area: √(1/3)
+  const BL_SPLIT_ST = 1;        // Split 1: the side panels ±1 semitone apart from the sternites
+  const BL_PAN = 0.4;           // the side panels at ±0.4 × Spread from the centre
 
   // ids, defaults and ranges: the one table the C++ core and the UI copy.
   // log: the knob moves logarithmically; curve: knob position^curve; step: whole steps.
@@ -567,6 +577,7 @@
       t1.advance(j0, j1, this.sRe, this.sIm, this.dL, this.dR, e.panL[1], e.panR[1]);
       const sRe = this.sRe, sIm = this.sIm, dL = this.dL, dR = this.dR;
       if (e.plantOn) { this.runPlant(j0, j1, oL, oR); return; }
+      if (e.bladderOn) { this.runBladder(j0, j1, oL, oR); return; }
       if (!e.bodyOn) {
         for (let j = j0; j < j1; j++) { oL[j] += dL[j]; oR[j] += dR[j]; }
         return;
@@ -619,6 +630,30 @@
       if (b2r * b2r + b2i * b2i < 1e-30) { b2r = 0; b2i = 0; }
       if (hy * hy + hx * hx < 1e-30) { hx = 0; hy = 0; }
       this.b0r = b0r; this.b0i = b0i; this.b1r = b1r; this.b1i = b1i; this.b2r = b2r; this.b2i = b2i; this.hpX = hx; this.hpY = hy;
+    }
+
+    // Bladder: the tymbals drive one air sac; its three panels (b0 left tergites, b1 right, b2 the
+    // sternites) each ring at their own pitch (Split) and radiate in phase from their own place
+    runBladder(j0, j1, oL, oR) {
+      const e = this.e, sRe = this.sRe, sIm = this.sIm, dL = this.dL, dR = this.dR;
+      let b0r = this.b0r, b0i = this.b0i, b1r = this.b1r, b1i = this.b1i, b2r = this.b2r, b2i = this.b2i, pk2 = this.pk2;
+      const c0r = this.c0r, c0i = this.c0i, g0 = this.g0, c1r = this.c1r, c1i = this.c1i, g1 = this.g1, c2r = this.c2r, c2i = this.c2i, g2 = this.g2;
+      const lvl = this.bodyLevel, dir = e.direct, pdec = e.pkDec, pL = e.blPanL, pR = e.blPanR, vc = BL_VENTRAL;
+      for (let j = j0; j < j1; j++) {
+        const ur = sRe[j], ui = sIm[j];
+        let n = b0r * c0r - b0i * c0i + g0 * ur; b0i = b0r * c0i + b0i * c0r + g0 * ui; b0r = n;
+        n = b1r * c1r - b1i * c1i + g1 * ur; b1i = b1r * c1i + b1i * c1r + g1 * ui; b1r = n;
+        n = b2r * c2r - b2i * c2i + g2 * ur; b2i = b2r * c2i + b2i * c2r + g2 * ui; b2r = n;
+        const mid = vc * b2r;
+        oL[j] += lvl * (pL * b0r + pR * b1r + mid) + dir * dL[j];
+        oR[j] += lvl * (pR * b0r + pL * b1r + mid) + dir * dR[j];
+        const a2 = b0r * b0r + b0i * b0i; pk2 *= pdec; if (a2 > pk2) pk2 = a2;
+      }
+      if (b0r * b0r + b0i * b0i < 1e-30) { b0r = 0; b0i = 0; }
+      if (b1r * b1r + b1i * b1i < 1e-30) { b1r = 0; b1i = 0; }
+      if (b2r * b2r + b2i * b2i < 1e-30) { b2r = 0; b2i = 0; }
+      if (pk2 < 1e-30) pk2 = 0;
+      this.b0r = b0r; this.b0i = b0i; this.b1r = b1r; this.b1i = b1i; this.b2r = b2r; this.b2i = b2i; this.pk2 = pk2;
     }
 
     render(nOS, oL, oR) {
@@ -788,6 +823,9 @@
       const bt = Math.round(P[PINDEX.body]);
       this.bodyOn = bt === BODY_HELMHOLTZ || bt === BODY_BLADDER;
       this.plantOn = bt === BODY_PLANT;
+      this.bladderOn = bt === BODY_BLADDER;
+      { const pan = 0.5 - BL_PAN * P[PINDEX.spread];       // the left panel's place; the right one mirrors it
+        this.blPanL = Math.cos(pan * Math.PI / 2) * Math.SQRT2; this.blPanR = Math.sin(pan * Math.PI / 2) * Math.SQRT2; }
       // Time, and the pitch Link measures from: the preset's middle C
       this.timeK = P[PINDEX.time]; this.link = P[PINDEX.link];
       this.refLog = Math.log2(440) + (60 - 69 + P[PINDEX.transpose] + P[PINDEX.detune] / 100) / 12;
@@ -837,6 +875,21 @@
         return;
       }
       if (!this.bodyOn) { v.periodS = srOS / f; v.halfT = 0.5 * v.periodS; return; }
+      if (this.bladderOn) {
+        // Extend raises pitch (815 → 900 Hz), Q (4 → 9) and level (×2); Split detunes the side panels
+        const ex = P[PINDEX.extend], sp = Math.pow(2, BL_SPLIT_ST * P[PINDEX.split] / 12);
+        const fb = f * Math.pow(BL_F_REST, 1 - ex), qb = P[PINDEX.bodyq] * (BL_Q_REST + (1 - BL_Q_REST) * ex);
+        v.periodS = srOS / fb; v.halfT = 0.5 * v.periodS;
+        let fr = fb * sp, om = TWO_PI * Math.min(fr, 0.45 * srOS) / srOS, r = Math.exp(-Math.PI * fr / (qb * srOS));
+        v.c0r = r * Math.cos(om); v.c0i = r * Math.sin(om); v.g0 = 1 - r; v.om0 = om; v.r0 = r;
+        fr = fb / sp; om = TWO_PI * Math.min(fr, 0.45 * srOS) / srOS; r = Math.exp(-Math.PI * fr / (qb * srOS));
+        v.c1r = r * Math.cos(om); v.c1i = r * Math.sin(om); v.g1 = 1 - r;
+        fr = fb; om = TWO_PI * Math.min(fr, 0.45 * srOS) / srOS; r = Math.exp(-Math.PI * fr / (qb * srOS));
+        v.c2r = r * Math.cos(om); v.c2i = r * Math.sin(om); v.g2 = 1 - r;
+        // two side panels and the sternites: normalised so the sum matches one Helmholtz mode
+        v.bodyLevel = BODY_GAIN * (BL_LVL_REST + (1 - BL_LVL_REST) * ex) / (2 + BL_VENTRAL) * 2;
+        return;
+      }
       // Helmholtz body: Aperture moves pitch, Q and level as the opercula do; Membrane raises Q
       const ap0 = P[PINDEX.aperture], ap = ap0 + (1 - ap0) * this.aftertouch, mem = P[PINDEX.membrane];
       const fb = f * Math.pow(AP_F_CLOSED, 1 - ap);
@@ -916,7 +969,7 @@
 
   TymbalEngine.BLOCK = BLOCK; TymbalEngine.OS = OS;
   TymbalEngine.toNorm = toNorm; TymbalEngine.fromNorm = fromNorm;
-  const core = { AP_STAGES, DISP_MAX, STEM_RATIOS, CARRIER_OCT, JITTER_SD, RUBATO_SD, ASYNC_RUNDOWN, FALL_ST, FALL_DB, FALL_SHARE, INTRO_POW, CLICK_PHASE, KAPPA, TRANS_CYC, TRANS_LAG, LOCK_AIM, A_REF, HEAT_BASE, OUTRIB_DB, LOCK_GATE, BODY_GAIN, AP_F_CLOSED, AP_Q_CLOSED, AP_DB_CLOSED };
+  const core = { BL_F_REST, BL_Q_REST, BL_LVL_REST, BL_VENTRAL, AP_STAGES, DISP_MAX, STEM_RATIOS, CARRIER_OCT, JITTER_SD, RUBATO_SD, ASYNC_RUNDOWN, FALL_ST, FALL_DB, FALL_SHARE, INTRO_POW, CLICK_PHASE, KAPPA, TRANS_CYC, TRANS_LAG, LOCK_AIM, A_REF, HEAT_BASE, OUTRIB_DB, LOCK_GATE, BODY_GAIN, AP_F_CLOSED, AP_Q_CLOSED, AP_DB_CLOSED };
   if (typeof module !== 'undefined' && module.exports) module.exports = { TymbalEngine, PARAMS, core };
   else root.TymbalEngine = TymbalEngine;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

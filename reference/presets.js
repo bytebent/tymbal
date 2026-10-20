@@ -47,8 +47,8 @@ const PRESETS = [
   },
   {
     name: '06 Cystosoma, bimodal pulses',
-    note: 'Bennet-Clark & Young 1998, Figs 4 and 12: the second tymbal a quarter cycle (6 ms) late; each tymbal\'s rib 1 is higher than the song, its ribs 2–3 at 850 Hz two cycles later. The trailing rib 1 lands out of tune on the ringing abdomen (the dip), its ribs 2–3 lock and build the second hump. Bladder body comes in batch 07 (Helmholtz for now).',
-    params: Object.assign(place(850), { rate: 40, lrphase: 0.25, ribs: 4, recruit: 3, first: 5, lead: 1.7, spacing: 0.9, tilt: -4, taper: -6, tymbalq: 15, bodyq: 9, stiffness: 0.4, outratio: 2, outlevel: -12, hold: 0.7, attack: 0.02, rubato: 0.1 }),
+    note: 'Bennet-Clark & Young 1998, Figs 4 and 12: the second tymbal a quarter cycle (6 ms) late; each tymbal\'s rib 1 is higher than the song, its ribs 2–3 at 850 Hz two cycles later. The trailing rib 1 lands out of tune on the ringing abdomen (the dip), its ribs 2–3 lock and build the second hump. Bladder body: both sides of the abdomen left and right, the belly in the centre.',
+    params: Object.assign(place(850), { body: 1, spread: 0.6, rate: 40, lrphase: 0.25, ribs: 4, recruit: 3, first: 5, lead: 1.7, spacing: 0.9, tilt: -4, taper: -6, tymbalq: 15, bodyq: 9, stiffness: 0.4, outratio: 2, outlevel: -12, hold: 0.7, attack: 0.02, rubato: 0.1 }),
     phrase: [[60, 0, 1.5]],
   },
   {
@@ -156,6 +156,19 @@ const PRESETS = [
     note: 'Link 1 makes Time follow the note like tape: an octave lower, every time doubles.',
     params: Object.assign(place(7600), MOTH, { rate: 1000 / 29.5, pair: 1, ribs: 22, recruit: 22, spacing: 0.57, first: 5, tilt: -9.5, taper: -3, tymbalq: 9, outlevel: -6, link: 1 }),
     phrase: [[60, 0, 1.2], [48, 1.3, 2.4]],
+  },
+  {
+    name: '24 Cystosoma extending its abdomen',
+    note: 'Bennet-Clark & Young 1998: from rest (32–34 mm) to singing length (39–42 mm) the abdomen doubles its sound, its Q rises from 4 to 9 and its pitch from 815 to 900 Hz. Here it starts at rest and stretches out over 1.5 s.',
+    params: Object.assign(place(850), { body: 1, spread: 0.6, extend: 0, rate: 40, lrphase: 0.25, ribs: 4, recruit: 3, first: 5, lead: 1.7, spacing: 0.9, tilt: -4, taper: -6, tymbalq: 15, bodyq: 9, stiffness: 0.4, outratio: 2, outlevel: -12, hold: 0.7, attack: 0.02 }),
+    phrase: [[60, 0, 3.0]],
+    sweep: { id: 'extend', from: 0, to: 1, start: 0.5, end: 2.0 },
+  },
+  {
+    name: '25 Cystosoma, panels split',
+    note: 'The three radiating panels share one air sac but are loosely coupled: loaded unevenly they ring at their own pitches (Bennet-Clark & Young 1998). Split 0.7 detunes the sides, Spread 1 puts them wide.',
+    params: Object.assign(place(850), { body: 1, spread: 1, split: 0.7, rate: 40, lrphase: 0.25, ribs: 4, recruit: 3, first: 5, lead: 1.7, spacing: 0.9, tilt: -4, taper: -6, tymbalq: 15, bodyq: 14, stiffness: 0.4, outratio: 2, outlevel: -12, hold: 0.7, attack: 0.02 }),
+    phrase: [[60, 0, 2.0]],
   },
 ];
 
