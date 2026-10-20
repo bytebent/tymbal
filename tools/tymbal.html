@@ -1,0 +1,1927 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tymbal</title>
+<style>
+:root{
+  --platinum:#dcdce0; --platinum-hi:#ececef; --etch:#9c9ca4; --ink:#000; --ink-soft:#4a4a52; --inset:#f4f4f6; --desk:#b9b9c0;
+  --blue:#f08a24; --blue-dk:#b85f0e; --blue-lt:#ffc58a; --blue-deep:#7a3d06; --graphite:#6e6e78; --screen:#0b0b0e; --lcd:#ffc58a;
+  --ui:"Lucida Grande","Lucida Sans Unicode",Geneva,Verdana,sans-serif; --mono:Monaco,"Courier New",monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:radial-gradient(circle at 1px 1px, rgba(0,0,0,.09) 1px, transparent 1.5px) 0 0/6px 6px, var(--desk);
+  font:13px/1.45 var(--ui); color:var(--ink); padding:24px 16px 40px; -webkit-user-select:none; user-select:none}
+.window{max-width:1060px;margin:0 auto;
+  background:repeating-linear-gradient(0deg, rgba(255,255,255,.55) 0 1px, rgba(255,255,255,0) 1px 2px, rgba(0,0,0,.035) 2px 3px, rgba(0,0,0,0) 3px 4px), var(--platinum);
+  border:1px solid #7d7d86;border-radius:9px;box-shadow:0 1px 0 #fff inset, 0 12px 32px rgba(0,0,0,.22);overflow:hidden}
+.titlebar{display:flex;align-items:center;gap:12px;padding:9px 14px 8px;background:linear-gradient(#f6f6f8,#d6d6db);border-bottom:1px solid #8e8e96}
+.mark{width:22px;height:18px;border-radius:3px;background:var(--graphite);box-shadow:0 0 0 1px rgba(0,0,0,.35);position:relative;flex:none;overflow:hidden}
+.mark::after{content:"";position:absolute;left:0;right:0;top:7px;height:4px;background:var(--blue)}
+.titlebar h1{margin:0;font-size:15px;font-weight:700;letter-spacing:-.2px}
+.titlebar .sub{color:var(--ink-soft);font-size:11px}
+.titlebar .sub .ver{margin-left:6px;color:#7a7a84}
+.titlebar .tag{margin-left:auto;color:var(--ink-soft);font-size:11px}
+.body{padding:14px 18px 16px}
+
+/* screen */
+.screen{background:var(--screen);border-radius:6px;padding:10px;box-shadow:0 0 0 1px #000,0 2px 6px rgba(0,0,0,.5) inset;position:relative}
+.view{position:relative}
+.view canvas{display:block;width:100%;height:180px;border-radius:3px;background:#060608}
+.view canvas.axis{position:absolute;inset:0;background:transparent;pointer-events:none}
+.view .lbl{position:absolute;left:8px;top:6px;font:10px/1 var(--mono);color:var(--lcd);opacity:.85;letter-spacing:1px;pointer-events:none}
+.readouts{display:flex;flex-wrap:wrap;gap:4px 18px;font:11px/1 var(--mono);color:var(--lcd);margin-top:8px;letter-spacing:1px}
+.readouts b{font-weight:400;opacity:.6;margin-right:6px}
+.readouts .hot{color:#fff}
+.readouts .warn{color:#fff;background:var(--blue-dk);padding:1px 4px;border-radius:2px;margin:-1px -4px}
+.power{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(11,11,14,.86);border-radius:6px;z-index:2;color:var(--lcd);font:11px var(--mono);letter-spacing:1px}
+.power.hide{display:none}
+
+/* controls */
+.rows{display:flex;flex-wrap:wrap;gap:12px;margin-top:14px}
+fieldset{flex:1 1 auto;margin:0;border:1px solid var(--etch);border-radius:6px;padding:8px 12px 10px;background:rgba(236,236,239,.7);box-shadow:0 1px 0 #fff, inset 0 1px 0 #fff;min-width:0}
+legend{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;padding:0 6px;display:flex;align-items:center;gap:6px}
+legend .dot{width:8px;height:8px;border-radius:50%;background:var(--blue);box-shadow:0 0 0 1px rgba(0,0,0,.35) inset}
+.knobs{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:flex-end;justify-content:space-around}
+.knob{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;width:64px}
+.knob.big{width:92px}
+.dial{--a0:0deg;--a1:0deg;--c:var(--blue);position:relative;width:44px;height:44px;border-radius:50%;cursor:ns-resize;touch-action:none;outline:none;
+  background:conic-gradient(from 225deg, #b9b9c0 0 var(--a0), var(--c) var(--a0) var(--a1), #b9b9c0 var(--a1) 270deg, transparent 270deg)}
+.knob.big .dial{width:70px;height:70px}
+.dial::before{content:"";position:absolute;inset:4px;border-radius:50%;background:var(--platinum-hi)}
+.dial .cap{position:absolute;inset:6px;border-radius:50%;
+  background:radial-gradient(circle at 50% 22%, rgba(255,255,255,.95) 0 18%, rgba(255,255,255,0) 46%), radial-gradient(circle at 50% 80%, #f7f7fa, #c8c8ce 60%, #9a9aa3);
+  box-shadow:0 2px 3px rgba(0,0,0,.35), 0 0 0 1px #7d7d86}
+.knob.big .dial .cap{inset:8px}
+.dial .ptr{position:absolute;inset:6px;border-radius:50%;pointer-events:none}
+.knob.big .dial .ptr{inset:8px}
+.dial .ptr::after{content:"";position:absolute;left:50%;top:3px;width:3px;height:30%;margin-left:-1.5px;border-radius:2px;background:#1a1a1e}
+.dial .mark30{position:absolute;inset:0;border-radius:50%;pointer-events:none}
+.dial .mark30::after{content:"";position:absolute;left:50%;top:-3px;width:2px;height:7px;margin-left:-1px;background:var(--blue-deep);border-radius:1px}
+.dial:focus-visible{box-shadow:0 0 0 2px var(--blue)}
+.knob .name{font-weight:700;white-space:nowrap}
+.val{font:700 10.5px var(--ui);background:var(--inset);box-shadow:inset 0 1px 2px rgba(0,0,0,.25);border-radius:3px;padding:1px 6px;min-width:56px;text-align:center;white-space:nowrap}
+
+.seg{display:inline-flex;flex-wrap:wrap;justify-content:center;border:1px solid #7d7d86;border-radius:12px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+.seg button{font:700 11px var(--ui);border:0;padding:4px 10px;cursor:pointer;color:#222;background:linear-gradient(#fff,#d8d8dd 48%,#c4c4ca 52%,#e6e6ea)}
+.seg button+button{border-left:1px solid #9c9ca4}
+.seg button[aria-pressed="true"]{color:#fff;text-shadow:0 -1px 0 rgba(0,0,0,.3);background:linear-gradient(var(--blue-lt),var(--blue) 48%,#d9741a 52%,#f7a254)}
+.seg button:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
+.segwrap{display:flex;flex-direction:column;align-items:center;gap:5px;font-size:11px;font-weight:700;padding-bottom:4px}
+.chips{display:flex;gap:3px;margin-top:2px}
+.chips button{font:700 9.5px var(--ui);border:1px solid #7d7d86;border-radius:8px;padding:1px 5px;cursor:pointer;background:linear-gradient(#fff,#d8d8dd);color:#222}
+.chips button:hover{background:linear-gradient(var(--blue-lt),var(--blue));color:#fff;border-color:var(--blue-dk)}
+.curve{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-weight:700}
+.curve canvas{width:96px;height:46px;border-radius:4px;background:var(--screen);box-shadow:0 0 0 1px #000 inset}
+
+.gel{display:inline-flex;align-items:center;padding:6px 18px;border-radius:999px;font:700 12px var(--ui);color:#fff;border:1px solid var(--blue-dk);position:relative;cursor:pointer;
+  background:linear-gradient(var(--blue-lt),var(--blue) 48%,#d9741a 52%,#f7a254);box-shadow:0 2px 4px rgba(0,0,0,.3), 0 1px 0 rgba(255,255,255,.5) inset;text-shadow:0 -1px 0 rgba(0,0,0,.3)}
+.gel::before{content:"";position:absolute;left:10px;right:10px;top:2px;height:45%;border-radius:999px;background:linear-gradient(rgba(255,255,255,.75),rgba(255,255,255,.1));pointer-events:none}
+.gel.grey{color:#222;border-color:#7d7d86;text-shadow:0 1px 0 #fff;background:linear-gradient(#fff,#d8d8dd 48%,#c4c4ca 52%,#e6e6ea)}
+.gel.small{padding:3px 12px;font-size:11px}
+.gel:focus-visible{outline:2px solid var(--blue-dk);outline-offset:2px}
+.dim{opacity:.4}
+
+/* pages */
+.tabs{display:flex;gap:0;margin-top:14px;border-bottom:1px solid #8e8e96;padding-left:10px}
+.tabs button{font:700 12px var(--ui);border:1px solid #8e8e96;border-bottom:0;border-radius:7px 7px 0 0;padding:6px 18px 5px;margin-right:-1px;cursor:pointer;color:#222;
+  background:linear-gradient(#fff,#d8d8dd 48%,#c4c4ca 52%,#e6e6ea);display:inline-flex;align-items:center;gap:7px;position:relative;top:1px}
+.tabs button[aria-selected="true"]{color:#fff;text-shadow:0 -1px 0 rgba(0,0,0,.3);background:linear-gradient(var(--blue-lt),var(--blue) 48%,#d9741a 52%,#f7a254);border-color:var(--blue-dk)}
+.tabs button:focus-visible{outline:2px solid var(--blue-dk);outline-offset:1px}
+.led{width:8px;height:8px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#eee,#9c9ca4 60%,#6e6e78);box-shadow:0 0 0 1px rgba(0,0,0,.45) inset;flex:none}
+.led.on{background:radial-gradient(circle at 35% 30%,#e3f6fe,var(--blue) 60%,var(--blue-dk));box-shadow:0 0 6px var(--blue),0 0 0 1px rgba(0,0,0,.45) inset}
+.page[hidden]{display:none}
+.page .rows{margin-top:12px}
+/* bench extras */
+.extras{margin-top:12px;border-style:dashed;background:rgba(244,244,246,.55)}
+.extras legend{color:var(--ink-soft)}
+.prow{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+select,input[type=number]{font:12px var(--ui);padding:3px 6px;border:1px solid #7d7d86;border-radius:4px;background:linear-gradient(#fff,#ececef);box-shadow:inset 0 1px 1px rgba(0,0,0,.08)}
+select:focus-visible,input:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
+.lane{display:grid;grid-template-columns:auto auto auto 1fr;gap:10px;align-items:center;margin-top:8px}
+.lane canvas{width:100%;height:54px;border-radius:4px;background:var(--screen);box-shadow:0 0 0 1px #000 inset;cursor:crosshair;touch-action:none}
+.check{display:inline-flex;align-items:center;gap:7px;font-weight:700;cursor:pointer}
+.check input{appearance:none;-webkit-appearance:none;width:16px;height:16px;margin:0;border-radius:4px;border:1px solid #7d7d86;cursor:pointer;
+  background:linear-gradient(#fff,#d8d8dd);box-shadow:0 1px 2px rgba(0,0,0,.2);position:relative}
+.check input:checked{border-color:var(--blue-dk);background:linear-gradient(var(--blue-lt),var(--blue) 48%,#d9741a 52%,#f7a254)}
+.check input:checked::after{content:"";position:absolute;left:5px;top:1px;width:4px;height:9px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.check input:focus-visible{box-shadow:0 0 0 2px var(--blue)}
+.note{font-size:11px;color:var(--ink-soft)}
+
+/* keyboard */
+.play{display:grid;grid-template-columns:auto 1fr;gap:10px;margin-top:14px}
+.bend{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;font-weight:700;width:50px}
+.bend input{writing-mode:vertical-lr;direction:rtl;width:24px;height:96px}
+.kbd{position:relative;height:118px;border-radius:6px;background:linear-gradient(#3a3a40,#1d1d22);padding:8px 8px 10px;box-shadow:inset 0 1px 0 rgba(255,255,255,.15),0 2px 4px rgba(0,0,0,.3)}
+.keys{position:relative;height:100%}
+.key{position:absolute;top:0;bottom:0;border-radius:0 0 5px 5px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:6px;font:700 11px var(--mono);cursor:pointer;touch-action:none}
+.key.w{background:linear-gradient(#fff,#e6e6ea);border:1px solid #6e6e78;color:#6e6e78;z-index:1}
+.key.b{background:linear-gradient(#3b3b42,#111);height:62%;bottom:auto;color:#bbb;z-index:2;border:1px solid #000;font-size:10px;padding-bottom:4px}
+.key.on.w{background:linear-gradient(#fde9d6,var(--blue));color:#fff}
+.key.on.b{background:linear-gradient(var(--blue-lt),var(--blue-dk));color:#fff}
+.key .c{position:absolute;top:6px;font:9px var(--ui);color:#9c9ca4;font-weight:400}
+
+.foot{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;margin-top:12px;font-size:11px;color:var(--ink-soft)}
+.foot .sp{margin-left:auto}
+.err{display:none;margin-top:10px;padding:8px 10px;border-left:4px solid var(--blue-dk);background:#fdf0e4;font-size:12px}
+/* source readout */
+.srcs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
+.src{font:11px/1.3 var(--mono);color:var(--lcd);letter-spacing:1px;display:grid;grid-template-columns:auto 1fr;gap:2px 8px;align-items:center}
+.src b{font-weight:400;opacity:.6}
+.src .bar{height:5px;border-radius:2px;background:rgba(255,197,138,.15);overflow:hidden}
+.src .bar i{display:block;height:100%;width:0;background:var(--blue)}
+.src.off{opacity:.3}
+@media (max-width:720px){ .titlebar .tag{display:none} .play{grid-template-columns:1fr} .bend{flex-direction:row;width:auto} .bend input{writing-mode:horizontal-tb;direction:ltr;width:160px;height:auto} .srcs{grid-template-columns:1fr} }
+/* tymbal additions */
+.view canvas#ribs{height:150px;margin-top:8px}
+.viewbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:6px;font:10px/1 var(--mono);color:var(--lcd);letter-spacing:1px}
+.viewbar .seg button{font-size:10px;padding:2px 8px}
+.viewbar .legend i{display:inline-block;width:8px;height:8px;border-radius:1px;margin:0 4px -1px 10px}
+.at{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;font-weight:700;width:50px}
+.at input{writing-mode:vertical-lr;direction:rtl;width:24px;height:96px}
+.play{grid-template-columns:auto auto 1fr}
+@media (max-width:720px){ .play{grid-template-columns:1fr} .at{flex-direction:row;width:auto} .at input{writing-mode:horizontal-tb;direction:ltr;width:160px;height:auto} }
+</style>
+</head>
+<body>
+<div class="window" role="application" aria-label="tymbal test bench">
+  <div class="titlebar">
+    <span class="mark" aria-hidden="true"></span>
+    <h1>tymbal</h1>
+    <span class="sub">Bytebent Audio<span class="ver">bench v0.1</span></span>
+    <span class="tag">insect voice · two ribbed tymbals and a body</span>
+  </div>
+  <div class="body">
+    <div class="screen">
+      <div class="view">
+        <canvas id="spec" aria-label="Scrolling spectrogram of the output, 0 to 20 kHz"></canvas>
+        <canvas id="axis" class="axis" aria-hidden="true"></canvas>
+        <span class="lbl">SPECTROGRAM · 0–20 kHz · LAST 3 S</span>
+      </div>
+      <div class="view">
+        <canvas id="ribs" aria-label="Each rib's click on the left and right tymbal, lit when it locked to the body, and the output envelope"></canvas>
+        <span class="lbl">TYMBALS · LEFT / RIGHT · ENVELOPE</span>
+      </div>
+      <div class="viewbar">
+        <span>WINDOW</span>
+        <span class="seg" role="group" aria-label="Time shown in the tymbal view" id="winSeg"><button type="button" data-w="0.05" aria-pressed="false">50 ms</button><button type="button" data-w="0.25" aria-pressed="true">250 ms</button><button type="button" data-w="1" aria-pressed="false">1 s</button></span>
+        <span class="legend"><i style="background:var(--blue)"></i>RIB LOCKED<i style="background:#8a8a92"></i>OWN TIMING<i style="background:#5a3a1e;height:4px;margin-bottom:1px"></i>OUT</span>
+      </div>
+      <div class="readouts" aria-live="off">
+        <span title="The newest voice's carrier (body pitch)"><b>CARRIER</b><span id="roCar">—</span></span>
+        <span title="Strokes per second from both tymbals"><b>PULSES</b><span id="roPul">—</span></span>
+        <span title="Share of recent ribs the lock moved into phase with the body"><b>LOCKED</b><span id="roLock">—</span></span>
+        <span title="Pitch keeper correction, while ribs lock"><b>KEEPER</b><span id="roKeep">—</span></span>
+        <span title="Time × Link: how much every muscle, rib and song time is stretched"><b>TIME</b><span id="roTime">—</span></span>
+        <span><b>VOICES</b><span id="roVo">0</span></span>
+        <span><b>OCT</b><span id="roOct">C3</span></span>
+        <span><b>VEL</b><span id="roVel">100</span></span>
+        <span><b>BEND</b><span id="roBend">0</span></span>
+        <span title="Share of one CPU core the engine needs to keep up, averaged over half a second; peak is the slowest single audio callback. This is the JavaScript reference engine; the plugin's C++ will be lighter."><b>DSP</b><span id="roCpu">—</span></span>
+      </div>
+      <div class="power" id="power">
+        <button class="gel" id="powerBtn" type="button">Power on</button>
+        <span>PLAY WITH THE COMPUTER KEYBOARD: A–; · Z/X OCTAVE · C/V VELOCITY</span>
+      </div>
+    </div>
+
+    <div class="rows">
+      <fieldset><legend><span class="dot"></span>Play</legend><div class="knobs" id="g-play"></div></fieldset>
+      <fieldset><legend><span class="dot"></span>Muscle</legend><div class="knobs" id="g-muscle"></div></fieldset>
+      <fieldset><legend><span class="dot"></span>Tymbal</legend><div class="knobs" id="g-tymbal"></div></fieldset>
+      <fieldset><legend><span class="dot"></span>Body</legend><div class="knobs" id="g-body"></div></fieldset>
+      <fieldset><legend><span class="dot"></span>Song</legend><div class="knobs" id="g-song"></div></fieldset>
+      <fieldset><legend><span class="dot"></span>Scale</legend><div class="knobs" id="g-scale"></div></fieldset>
+      <fieldset><legend><span class="dot"></span>Envelope</legend><div class="knobs" id="g-env"></div></fieldset>
+      <fieldset><legend><span class="dot"></span>Output</legend><div class="knobs" id="g-out"></div></fieldset>
+    </div>
+
+    <fieldset class="extras">
+      <legend><span class="dot" style="background:#fff;box-shadow:0 0 0 1px #6e6e78 inset"></span>Bench only: test presets</legend>
+      <div class="prow">
+        <label for="presetSel" style="font-weight:700">Test preset</label>
+        <select id="presetSel"></select>
+        <button class="gel small" id="presetLoad" type="button">Load</button>
+        <button class="gel grey small" id="presetPlay" type="button">Load and play</button>
+        <button class="gel grey small" id="resetAll" type="button">Reset to defaults</button>
+        <span class="note">Test presets stay out of the plugin build. Load and play runs the preset's notes, switch and sweep.</span>
+      </div>
+      <div class="note" id="presetAbout" style="margin-top:6px"></div>
+    </fieldset>
+
+    <div class="play">
+      <div class="bend"><span>Bend</span><input type="range" id="bend" min="-1" max="1" step="0.001" value="0" aria-label="Pitch bend, springs back"></div>
+      <div class="at"><span>Press</span><input type="range" id="at" min="0" max="1" step="0.001" value="0" aria-label="Aftertouch: opens the opercula"></div>
+      <div class="kbd"><div class="keys" id="keys"></div></div>
+    </div>
+    <div class="foot">
+      <label>Tempo (for Sync) <input type="number" id="tempo" min="40" max="240" value="120" style="width:64px"> BPM</label>
+      <span>Latency 32 samples · 4× oversampled · C3 plays the carrier at C8 (4186 Hz)</span>
+      <button class="gel grey sp" id="panic" type="button">All notes off</button>
+    </div>
+    <div class="err" id="err"></div>
+  </div>
+</div>
+
+<script type="text/plain" id="dsp">
+/*
+ * tymbal engine · bytebent
+ *
+ * An insect tymbal voice. Each voice has two tymbals and a body. A tymbal is a state machine
+ * (OUT → rib 1 IN → … → rib n IN → OUT) driving one resonator that retunes with the state: each
+ * rib that buckles strikes it at its own frequency and Q, and when the muscle relaxes the tymbal
+ * pops out with one quieter, higher click (Bennet-Clark 1997; Young & Bennet-Clark 1995). Both
+ * tymbals drive the body, a resonator at the carrier. The body acts back only through timing: its
+ * phase can pull the moment each rib buckles (the lock), which is how a slack tymbal sings a pure
+ * tone (Young & Josephson 1983). See design.md.
+ *
+ * Resonators are complex one-poles: z ← z · r·e^{iω}, output Re(z). A click adds a phasor at its
+ * exact sub-sample time. The start phase gives the measured shape: a short, small inward
+ * half-wave, then a larger rebound. Each click first runs in a short transient whose frequency
+ * starts 7.5% low and rises over a few cycles (Bennet-Clark 1997: +150–350 Hz through the decay),
+ * then merges into the tymbal's resonator, so the nonlinear start never pulls the pitch.
+ *
+ * A voice-level muscle clock issues the strokes: one cycle at a time, both tymbals (the second Lr
+ * phase into the cycle), shaped by the song (echemes, phrases with an intro and a fall), Rubato,
+ * Jitter and the drive (Sync: one command per stroke; Async: one per burst). In Carrier mode the
+ * note sets the carrier, in Rate mode the pulse rate.
+ *
+ * Time stretches every muscle, rib and song time (tape-speed scaling for ultrasonic moths, whose
+ * carriers the note already places in range); Link makes it follow the note like tape. Every
+ * resonator stays within 20 Hz–16 kHz. The Plant body carries hopper signals through a stem:
+ * dispersion (low frequencies arrive late), then three bending modes.
+ *
+ * The Bladder body (bladder cicadas) is one air sac shared by three thin panels that radiate in
+ * phase: both sides of tergites 3–5, left and right, and the sternites in the centre.
+ *
+ * Batch 07: the Bladder body, on top of the moths, hoppers, Time, Link, the guard, the Plant body,
+ * the muscles, song, Rate mode, two tymbals, Helmholtz and Open bodies and the lock. Every
+ * parameter of the design is in the table; Chorus (batch 08.5) is accepted and ignored until then.
+ *
+ * Everything runs at 4× the host rate in fixed 32-sample blocks and is decimated with a
+ * windowed-sinc FIR, as in Throat, Dolphin and Syrinx. process() never allocates. Same seed, same
+ * notes: same output, at any host buffer size.
+ *
+ * Works in an AudioWorklet and in Node (module.exports) for offline tests.
+ */
+(function (root) {
+  'use strict';
+
+  const OS = 4;                 // internal oversampling
+  const BLOCK = 32;             // fixed internal block (host samples) = latency
+  const FIR_LEN = 128;          // decimation filter taps (at 4x rate)
+  const MAX_VOICES = 8;
+  const MAX_RIBS = 24;
+  const MAX_EV = 64;            // queued events per tymbal (one stroke: ≤ 24 IN, ≤ 25 OUT)
+  const VIEW_N = 1024;          // recent clicks kept for the live view (a ring; power of two)
+  const VIEW_IN_LOCKED = 1, VIEW_IN_OWN = 2, VIEW_OUT = 3;
+  const TWO_PI = 2 * Math.PI;
+  const F_CAP = 16000;          // the carrier drops whole octaves above this
+  const F_MIN = 20;
+  const CLICK_PHASE = 1.3 * Math.PI;   // IN click: starts at cos = −0.59 (small rarefaction), rises to a full compression
+  const KAPPA = 0.075;          // a click's frequency starts 7.5% low (Bennet-Clark 1997: +150–350 Hz through the decay)
+  const TRANS_CYC = 1.5;        // … and recovers with this time constant, in cycles; merged after 4 time constants
+  const TRANS_LAG = KAPPA * TWO_PI * TRANS_CYC * (1 - Math.exp(-4));   // phase a click has lost when it merges (rad)
+  const LOCK_AIM = 0.5 * TRANS_LAG;    // the lock aims this early: the click's mean phase over its transient
+  // pitch keeper: while ribs lock, the body's measured phase advance is held to the note
+  const KEEP_RATE = 0.05;       // share of the error corrected per block (about 13 ms at 48 kHz)
+  const KEEP_MAX = 0.1;         // octaves
+  const KEEP_LOCKED = 0.5;      // acts only while at least this share of recent ribs lock
+  const A_REF = 0.25;           // click amplitude at full effort
+  const OUTRIB_DB = 0;          // ribs popping out, against the OUT plate click (moths: a passive half-cycle of like clicks)
+  const HEAT_BASE = 1.846;      // M. cassini sub-pulses 650 → 1200 Hz from 20 to 35 °C (Young & Josephson 1983)
+  const STOP_EFFORT = 0.01;     // below this the muscle stops
+  // the lock (Bennet-Clark 1997: locked above about ⅓ of the last pulse's peak, broken below ¼)
+  const LOCK_GATE = 0.25;
+  const PEAK_TAU = 0.03;        // s, slow release of that peak (it restarts at every click)
+  // Helmholtz body (Bennet-Clark & Young 1992, Table 2: model opercula removed vs a 0.5–1 mm gap)
+  const AP_F_CLOSED = 3.54 / 4.33, AP_Q_CLOSED = 5.2 / 7.8, AP_DB_CLOSED = 56.2 - 65.6;
+  const MEMBRANE_Q = 3;         // Q × (1 + 3·Membrane): M. septendecim's Q 25 against about 6
+  const MEMBRANE_DB = -6;
+  const CAVITY_RATIOS = [1.75, 2.1];   // weak model resonances near 7.5 and 9 kHz above 4.3 kHz
+  const BODY_GAIN = 2.5;        // body output against the bare tymbal (tuned by level, see tests.md)
+  const STIFF_DB = 9;           // click level from Stiffness 0 to 1 (louder when stiff), 0 dB at 0.6
+  // muscle and song
+  const CARRIER_OCT = 4;        // Carrier mode: the carrier is 4 octaves above the note (middle C → C8)
+  const RATE_MAX = 2000;        // strokes per second per tymbal, upper limit
+  const JITTER_SD = 0.3;        // per-stroke (and per-echeme) timing deviation at Jitter 1; clipped at ±2 SD
+  const RUBATO_SD = 0.2;        // slow tempo drift at Rubato 1 (log), new target each echeme/phrase or 0.3 s
+  const RUBATO_TAU = 0.2;       // s
+  const ASYNC_RUNDOWN = 0.6;    // Async: force falls by this share across a burst
+  const FALL_ST = 4;            // Fall 1: pitch drops 4 semitones …
+  const FALL_DB = 12;           // … and level 12 dB …
+  const FALL_SHARE = 0.3;       // … over the last 30% of the phrase
+  const INTRO_POW = 4;          // intro rate: Start^(1 − u⁴), low most of the intro, rising at its end
+  const ECHEME_BEATS = [16, 8, 4, 2, 1, 1 / 2, 1 / 3, 1 / 4, 1 / 6, 1 / 8, 1 / 12, 1 / 16, 1 / 24, 1 / 32];
+  const SONG_CONT = 0, SONG_ECHEME = 1, SONG_PHRASE = 2;
+  // Plant body: a stem carrying bending waves (dispersive: low frequencies travel slower)
+  const AP_STAGES = 8;          // first-order all-pass stages
+  const DISP_MAX = 0.02;        // s: the delay at low frequencies through the chain at Distance 1
+  const STEM_RATIOS = [1, 2.756, 5.404];   // free–free beam modes (Euler–Bernoulli)
+  const STEM_GAINS = [1, 0.5, 0.25];
+  const STEM_DIRECT = 0.35;     // the dispersed wave itself, beside the stem's resonances
+  const PLANT_GAIN = 3;         // Plant output against the bare tymbal (set by level, see tests.md)
+  const CONTACT_HZ = 40;        // contact colour: a first-order high-pass
+  // Bladder body (Bennet-Clark & Young 1998): abdomen extended 32–34 → 39–42 mm
+  const BL_F_REST = 815 / 900;  // pitch at rest against full extension
+  const BL_Q_REST = 4 / 9;      // Q at rest against full extension
+  const BL_LVL_REST = 0.34;     // level at rest against full extension: the response to a five-cycle burst doubles
+  const BL_VENTRAL = 0.58;      // sternites: 10 dB below the tergites per area, about 3× the area: √(1/3)
+  const BL_SPLIT_ST = 1;        // Split 1: the side panels ±1 semitone apart from the sternites
+  const BL_PAN = 0.4;           // the side panels at ±0.4 × Spread from the centre
+
+  // ids, defaults and ranges: the one table the C++ core and the UI copy.
+  // log: the knob moves logarithmically; curve: knob position^curve; step: whole steps.
+  const PARAMS = [
+    // Play
+    { id: 'playmode', def: 0, min: 0, max: 1, step: 1 },          // Carrier, Rate (batch 04)
+    { id: 'carrier', def: 4300, min: 50, max: 16000, log: true }, // Hz, body pitch in Rate mode
+    { id: 'transpose', def: 0, min: -48, max: 48, step: 1 },      // st (Carrier adds +4 octaves)
+    { id: 'detune', def: 0, min: -100, max: 100 },                // cents
+    { id: 'bendrange', def: 12, min: 2, max: 48, step: 1 },
+    { id: 'glide', def: 0.02, min: 0, max: 2, curve: 3 },         // s, mono only
+    { id: 'mode', def: 0, min: 0, max: 1, step: 1 },              // Mono, Poly
+    // Muscle
+    { id: 'rate', def: 117, min: 1, max: 600, log: true },        // cycles per second per tymbal
+    { id: 'drive', def: 0, min: 0, max: 1, step: 1 },             // Sync, Async (batch 04)
+    { id: 'burst', def: 4, min: 1, max: 16, step: 1 },
+    { id: 'lrphase', def: 0.5, min: 0, max: 0.5 },                // batch 03
+    { id: 'pair', def: 0, min: 0, max: 2, step: 1 },              // Both, Left, Right (batch 03)
+    { id: 'asym', def: 0.1, min: 0, max: 1 },
+    { id: 'hold', def: 0.5, min: 0.05, max: 0.95 },               // OUT click, share of the cycle
+    { id: 'heat', def: 30, min: 20, max: 40 },                    // °C
+    // Tymbal
+    { id: 'ribs', def: 4, min: 1, max: MAX_RIBS, step: 1 },
+    { id: 'recruit', def: 3, min: 1, max: MAX_RIBS, step: 1 },
+    { id: 'spacing', def: 0.6, min: 0.05, max: 10, log: true },   // ms
+    { id: 'lead', def: 0, min: 0, max: 10, curve: 2 },            // ms
+    { id: 'first', def: 0, min: -12, max: 12 },                   // st, rib 1 against the carrier
+    { id: 'tilt', def: -5, min: -36, max: 12 },                   // st, last rib against rib 2
+    { id: 'firstlevel', def: 0, min: -12, max: 6 },               // dB
+    { id: 'taper', def: -4, min: -24, max: 6 },                   // dB, last rib against rib 2
+    { id: 'tymbalq', def: 9, min: 2, max: 40, log: true },        // Q at the carrier
+    { id: 'tune', def: 0, min: -12, max: 12 },                    // st, tymbal against the body
+    { id: 'stiffness', def: 0.6, min: 0, max: 1 },                // batch 03
+    { id: 'scatter', def: 0.03, min: 0, max: 1 },                 // batch 03
+    { id: 'outratio', def: 1.5, min: 1, max: 3 },
+    { id: 'outlevel', def: -10, min: -40, max: 0 },               // dB
+    { id: 'outclicks', def: 0, min: 0, max: 1 },
+    { id: 'outspeed', def: 0.3, min: 0.05, max: 1, log: true },
+    // Body (batch 03, 06, 07)
+    { id: 'body', def: 0, min: 0, max: 3, step: 1 },              // Helmholtz, Bladder, Open, Plant
+    { id: 'bodyq', def: 6, min: 1, max: 40, log: true },
+    { id: 'aperture', def: 1, min: 0, max: 1 },
+    { id: 'membrane', def: 0, min: 0, max: 1 },
+    { id: 'cavity', def: 0.2, min: 0, max: 1 },
+    { id: 'extend', def: 1, min: 0, max: 1 },
+    { id: 'split', def: 0, min: 0, max: 1 },
+    { id: 'distance', def: 0.3, min: 0, max: 1 },
+    { id: 'stem', def: 250, min: 20, max: 2000, log: true },
+    { id: 'direct', def: 0.03, min: 0, max: 1 },
+    // Song (batch 04)
+    { id: 'song', def: 0, min: 0, max: 2, step: 1 },              // Continuous, Echeme, Phrase
+    { id: 'echeme', def: 0.1, min: 0.005, max: 5, log: true },    // s
+    { id: 'gap', def: 0.09, min: 0, max: 5, curve: 2 },           // s
+    { id: 'phrase', def: 3, min: 0.2, max: 30, log: true },       // s
+    { id: 'rest', def: 1, min: 0, max: 10, curve: 2 },            // s
+    { id: 'start', def: 1, min: 0.05, max: 1 },
+    { id: 'intro', def: 0, min: 0, max: 0.9 },
+    { id: 'fall', def: 0, min: 0, max: 1 },
+    { id: 'jitter', def: 0.03, min: 0, max: 1 },
+    { id: 'rubato', def: 0, min: 0, max: 1 },
+    { id: 'sync', def: 0, min: 0, max: 1, step: 1 },
+    // Scale (batch 06)
+    { id: 'time', def: 1, min: 0.1, max: 32, log: true },
+    { id: 'link', def: 0, min: 0, max: 1 },
+    // Chorus (batch 07)
+    { id: 'chorus', def: 0, min: 0, max: 2, step: 1 },            // Free, Sync, Alternate
+    { id: 'coupling', def: 0, min: 0, max: 1 },
+    // Envelope: shapes effort (click level and recruitment), sampled at each stroke
+    { id: 'attack', def: 0.01, min: 0.001, max: 5, curve: 3 },
+    { id: 'decay', def: 0.3, min: 0.001, max: 5, curve: 3 },
+    { id: 'sustain', def: 0.9, min: 0, max: 1 },
+    { id: 'release', def: 0.05, min: 0.001, max: 8, curve: 3 },
+    // Output
+    { id: 'spread', def: 0.3, min: 0, max: 1 },
+    { id: 'volume', def: -6, min: -48, max: 6 },                  // dB
+  ];
+  const PINDEX = {};
+  PARAMS.forEach((p, i) => { PINDEX[p.id] = i; });
+
+  // knob position (0–1) ↔ value, as the UI's knobs move
+  function toNorm(d, v) {
+    if (d.log) return Math.log(v / d.min) / Math.log(d.max / d.min);
+    const n = (v - d.min) / (d.max - d.min);
+    return d.curve ? Math.pow(Math.max(0, n), 1 / d.curve) : n;
+  }
+  function fromNorm(d, n) {
+    n = n < 0 ? 0 : n > 1 ? 1 : n;
+    let v = d.log ? d.min * Math.pow(d.max / d.min, n) : d.min + (d.max - d.min) * (d.curve ? Math.pow(n, d.curve) : n);
+    if (d.step) v = Math.round(v / d.step) * d.step;
+    return v;
+  }
+  function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
+  const dbToGain = (db) => Math.pow(10, db / 20);
+
+  function makeFir() {
+    const h = new Float32Array(FIR_LEN);
+    const fc = 0.5 / OS * 0.92, M = (FIR_LEN - 1) / 2;
+    let sum = 0;
+    for (let n = 0; n < FIR_LEN; n++) {
+      const x = n - M;
+      const s = x === 0 ? 2 * fc : Math.sin(TWO_PI * fc * x) / (Math.PI * x);
+      const a = TWO_PI * n / (FIR_LEN - 1);
+      const w = 0.35875 - 0.48829 * Math.cos(a) + 0.14128 * Math.cos(2 * a) - 0.01168 * Math.cos(3 * a);
+      h[n] = s * w; sum += h[n];
+    }
+    for (let n = 0; n < FIR_LEN; n++) h[n] /= sum;
+    return h;
+  }
+
+  // event kinds
+  const EV_IN = 1, EV_OUTRIB = 2, EV_OUT = 3;
+  const BODY_HELMHOLTZ = 0, BODY_BLADDER = 1, BODY_OPEN = 2, BODY_PLANT = 3;
+
+  /* ---------- one tymbal: muscle clock, rib events, retuning resonator ---------- */
+  class Tymbal {
+    constructor(v, side) {
+      this.v = v; this.side = side;
+      this.evT = new Float64Array(MAX_EV);     // absolute time, oversampled samples (moved by the lock)
+      this.evKind = new Uint8Array(MAX_EV);
+      this.evRib = new Uint8Array(MAX_EV);     // rib index (1-based), or the rib left IN after a pop
+      this.evA = new Float64Array(MAX_EV);     // amplitude
+      this.evDec = new Uint8Array(MAX_EV);     // 1 once the lock has set its moment
+      this.evLock = new Uint8Array(MAX_EV);    // 1 if the lock moved it into phase (for the live view)
+      this.reset();
+    }
+    reset() {
+      this.zr = 0; this.zi = 0;                  // the tymbal's resonator
+      this.wr = 0; this.wi = 0;                  // the newest click's nonlinear transient
+      this.weps = 0; this.wdec = 1; this.wleft = 0;
+      this.om = 0; this.rr = 0; this.cr = 1; this.ci = 0;   // ω, r, r·cos ω, r·sin ω
+      this.nEv = 0; this.iEv = 0;
+      this.nextStroke = Infinity;                // set by the voice's muscle clock
+      this.pendC = 1; this.pendF = 1;            // that stroke's cycle length and force
+      this.state = 0;                            // ribs currently IN (0 = OUT)
+      this.lastF = 0; this.lastQ = 0;
+      this.strokes = 0; this.pk2 = 0;
+    }
+    energy() { return this.zr * this.zr + this.zi * this.zi + this.wr * this.wr + this.wi * this.wi; }
+
+    // set the resonator to frequency f (Hz) and quality Q, keeping its state (the tymbal retunes)
+    retune(f, Q) {
+      const e = this.v.e;
+      const om = TWO_PI * f / e.srOS;
+      const r = Math.exp(-Math.PI * f / (Q * e.srOS));
+      this.om = om; this.rr = r; this.cr = r * Math.cos(om); this.ci = r * Math.sin(om);
+      this.lastF = f; this.lastQ = Q;
+    }
+
+    // queue one stroke starting at absolute time T0: ribs in, then the OUT click(s)
+    stroke(T0) {
+      const v = this.v, e = v.e;
+      const effort = v.effortNow * this.pendF;
+      const cycle = this.pendC;
+      const ribs = e.ribs;
+      const nWant = Math.max(1, Math.min(ribs, Math.round(e.recruit * Math.sqrt(effort))));
+      const tf = v.timeF / e.heatF;                // Time (and Link) stretch, Heat shrinks
+      const sp = e.spacingS * tf, ld = e.leadS * e.leadF * tf;
+      const tOut = T0 + e.hold * cycle;
+      const tEnd = T0 + cycle - 1;
+      const A = A_REF * effort * e.stiffGain * (this.side ? e.asymG : 1);
+      const sc = e.scatter * v.periodS;         // up to one carrier period either way
+      let n = 0, nIn = 0;
+      for (let k = 1; k <= nWant; k++) {
+        let t = k === 1 ? T0 : T0 + ld + (k - 1) * sp;
+        if (k > 1 && t >= tOut - 1) break;      // the muscle lets go before this rib buckles
+        if (sc > 0) t += sc * (2 * v.rand() - 1);
+        if (n > 0 && t <= this.evT[n - 1]) t = this.evT[n - 1] + 1;
+        this.evT[n] = t; this.evKind[n] = EV_IN; this.evRib[n] = k; this.evA[n] = A * e.ribGain[k]; this.evDec[n] = 0; this.evLock[n] = 0; n++; nIn = k;
+      }
+      // popping out: the recruited ribs in reverse order, then the plate
+      const nPop = Math.round(e.outclicks * nIn);
+      const osp = Math.max(1, sp * e.outspeed);
+      let t = Math.max(tOut, this.evT[n - 1] + 1);
+      for (let j = 0; j < nPop; j++) {
+        const k = nIn - j;                       // rib k pops out; ribs 1..k−1 stay IN
+        if (t >= tEnd) break;
+        this.evT[n] = t; this.evKind[n] = EV_OUTRIB; this.evRib[n] = k - 1; this.evA[n] = A * e.outGain * dbToGain(OUTRIB_DB); this.evDec[n] = 1; n++;
+        t += osp;
+      }
+      if (t >= tEnd) t = Math.max(this.evT[n - 1] + 1, tEnd - 1);
+      this.evT[n] = t; this.evKind[n] = EV_OUT; this.evRib[n] = 0; this.evA[n] = A * e.outGain; this.evDec[n] = 1; n++;
+      this.nEv = n; this.iEv = 0;
+      this.nextStroke = Infinity;
+      this.strokes++;
+      if (e.onsets) e.onsets.push([T0 / e.srOS, this.side, A]);
+    }
+
+    // when this tymbal next needs attention: an IN rib is decided half a period before its moment
+    nextTime() {
+      const i = this.iEv;
+      if (i < this.nEv) return this.evDec[i] ? this.evT[i] : this.evT[i] - this.v.halfT;
+      return this.nextStroke;
+    }
+
+    // handle what is due; sNow = time of the last output sample, d = event time − sNow (0 < d ≤ 1)
+    step(sNow, d) {
+      const v = this.v;
+      if (this.iEv >= this.nEv) {                // a new stroke is due (late if the last one ran over)
+        if (!v.muscleOn || !v.e.tymOn[this.side]) { this.nextStroke = Infinity; return; }
+        this.stroke(Math.max(this.nextStroke, sNow + 1e-6));
+        return;
+      }
+      const i = this.iEv;
+      if (!this.evDec[i]) { v.decide(this, i, sNow); this.evDec[i] = 1; return; }
+      this.fire(d);
+    }
+
+    fire(d) {
+      const v = this.v, e = v.e;
+      const i = this.iEv++;
+      const kind = this.evKind[i], k = this.evRib[i];
+      let f, Q, phase;
+      if (kind === EV_IN) { f = e.ribF[k]; Q = e.ribQ[k]; phase = CLICK_PHASE; this.state = k; e.stats.ins++; }
+      else if (kind === EV_OUTRIB) { f = k > 0 ? e.ribF[k] : e.outF; Q = k > 0 ? e.ribQ[k] : e.outQ; phase = CLICK_PHASE + Math.PI; this.state = k; }
+      else { f = e.outF; Q = e.outQ; phase = CLICK_PHASE + Math.PI; this.state = 0; }
+      if (this.side) { f = Math.min(f * e.asymF, F_CAP); Q /= e.asymF; }
+      // the live view's record: when, which side, locked or not
+      const vi = e.vN++ & (VIEW_N - 1);
+      e.vT[vi] = this.evT[i]; e.vS[vi] = this.side; e.vK[vi] = kind !== EV_IN ? VIEW_OUT : this.evLock[i] ? VIEW_IN_LOCKED : VIEW_IN_OWN;
+      // the lock gate compares with the peak since the last click (Bennet-Clark 1997: the preceding pulse)
+      v.pk2 = v.b0r * v.b0r + v.b0i * v.b0i;
+      this.pk2 = (this.zr + this.wr) * (this.zr + this.wr) + (this.zi + this.wi) * (this.zi + this.wi);
+      // the previous click's transient is over: merge it into the resonator
+      if (this.wleft > 0) { this.zr += this.wr; this.zi += this.wi; this.wr = this.wi = 0; this.wleft = 0; }
+      this.retune(f, Q);
+      // amplitude so the first full lobe peaks at evA: it comes 0.35 cycle after the start
+      const a = this.evA[i] * Math.exp(Math.PI * 0.35 / Q);
+      // the phasor a·e^{iφ} belongs to the event time; step it back d samples to the last output sample
+      const back = Math.pow(this.rr, -d), th = phase - this.om * d;
+      this.wr = a * back * Math.cos(th);
+      this.wi = a * back * Math.sin(th);
+      // its frequency starts KAPPA low and recovers over TRANS_CYC cycles
+      const tau = TRANS_CYC * TWO_PI / this.om;
+      this.weps = KAPPA * this.om; this.wdec = Math.exp(-1 / tau); this.wleft = Math.ceil(4 * tau);
+    }
+
+    // run over [j0, j1) of the block: add the complex output to sRe/sIm, the panned real output to dL/dR
+    advance(j0, j1, sRe, sIm, dL, dR, gL, gR) {
+      let zr = this.zr, zi = this.zi, wr = this.wr, wi = this.wi, eps = this.weps, left = this.wleft, pk2 = this.pk2;
+      const cr = this.cr, ci = this.ci, dec = this.wdec, pdec = this.v.e.pkDec;
+      for (let j = j0; j < j1; j++) {
+        const nr = zr * cr - zi * ci; zi = zr * ci + zi * cr; zr = nr;
+        let ur = zr, ui = zi;
+        if (left > 0) {
+          // rotate by r·e^{i(ω − ε)}
+          const ca = 1 - 0.5 * eps * eps, rr = cr * ca + ci * eps, ri = ci * ca - cr * eps;
+          const nw = wr * rr - wi * ri; wi = wr * ri + wi * rr; wr = nw;
+          eps *= dec;
+          if (--left === 0) { zr += wr; zi += wi; wr = 0; wi = 0; }
+          ur = zr + wr; ui = zi + wi;
+        }
+        sRe[j] += ur; sIm[j] += ui; dL[j] += ur * gL; dR[j] += ur * gR;
+        const a2 = ur * ur + ui * ui; pk2 *= pdec; if (a2 > pk2) pk2 = a2;
+      }
+      // flush what has died away, so silent stretches never run on subnormal numbers (slow on x86)
+      if (zr * zr + zi * zi < 1e-30) { zr = 0; zi = 0; }
+      if (left === 0 || wr * wr + wi * wi < 1e-30) { wr = 0; wi = 0; }
+      if (pk2 < 1e-30) pk2 = 0;
+      this.zr = zr; this.zi = zi; this.wr = wr; this.wi = wi; this.weps = eps; this.wleft = left; this.pk2 = pk2;
+    }
+  }
+
+  /* ---------- one voice: two tymbals and a body ---------- */
+  class Voice {
+    constructor(e, seed) {
+      this.e = e;
+      this.seed = (seed >>> 0) || 1;
+      this.tym = [new Tymbal(this, 0), new Tymbal(this, 1)];
+      const n = BLOCK * OS;
+      this.sRe = new Float64Array(n); this.sIm = new Float64Array(n);
+      this.dL = new Float64Array(n); this.dR = new Float64Array(n);
+      this.apX = new Float64Array(AP_STAGES); this.apY = new Float64Array(AP_STAGES);
+      this.reset();
+    }
+    reset() {
+      this.rng = this.seed;
+      this.stage = 0; this.env = 0; this.note = -1; this.held = false; this.vel = 1; this.age = 0;
+      this.logF = Math.log2(261.63); this.glideLeft = 0; this.glideStep = 0;   // the note (Carrier adds 4 octaves)
+      this.effortNow = 0; this.muscleOn = false; this.fNow = 0;
+      this.periodS = 1; this.halfT = 0;
+      this.kc = 0; this.lockFrac = 0; this.omNote = 0;   // pitch keeper: correction (octaves), recent lock share
+      // muscle clock and song: next cycle, the current echeme or phrase (start, end of sound, end)
+      this.nextCycle = Infinity; this.uStart = 0; this.uOn = 0; this.uEnd = -Infinity; this.uFirst = true;
+      this.burstIdx = 0; this.burstJ = 1; this.rubF = 1; this.rubT = 1; this.rubLeft = 0; this.fallU = 0;
+      this.timeF = 1;                            // Time × Link's tape factor
+      this.cycleNow = 0;                         // the last muscle cycle, samples (readout)
+      // Plant: all-pass chain states (x[n−1], y[n−1] per stage), its coefficient, the contact high-pass
+      this.apX.fill(0); this.apY.fill(0); this.apA = 0; this.hpX = 0; this.hpY = 0; this.kHP = 1;
+      // body: main mode b0 and two cavity modes, a low-pass, the peak the lock gate uses
+      this.b0r = this.b0i = this.b1r = this.b1i = this.b2r = this.b2i = 0; this.lp = 0; this.pk2 = 0;
+      this.om0 = 0; this.r0 = 0; this.c0r = 1; this.c0i = 0; this.g0 = 0;
+      this.c1r = 1; this.c1i = 0; this.g1 = 0; this.c2r = 1; this.c2i = 0; this.g2 = 0;
+      this.kLP = 1; this.bodyLevel = 1;
+      for (const t of this.tym) t.reset();
+    }
+    rand() {
+      let x = this.rng;
+      x ^= x << 13; x >>>= 0; x ^= x >>> 17; x ^= x << 5; x >>>= 0;
+      this.rng = x;
+      return x / 4294967296;
+    }
+    active() { return this.stage !== 0; }
+    bodyEnergy() { return this.b0r * this.b0r + this.b0i * this.b0i + this.b1r * this.b1r + this.b1i * this.b1i + this.b2r * this.b2r + this.b2i * this.b2i + this.lp * this.lp; }
+
+    pitchTarget(note) {
+      const m = this.e.m;
+      return Math.log2(440) + (note - 69 + m[PINDEX.transpose] + m[PINDEX.detune] / 100) / 12;
+    }
+    setTarget(note, glide) {
+      const t = this.pitchTarget(note);
+      const g = this.e.m[PINDEX.glide];
+      if (glide && g > 0.0015) {
+        const steps = Math.max(1, Math.round(g * this.e.sr / BLOCK));
+        this.glideStep = (t - this.logF) / steps; this.glideLeft = steps;
+      } else { this.logF = t; this.glideLeft = 0; }
+      this.note = note;
+    }
+    trigger(vel) {
+      const e = this.e;
+      this.vel = 0.2 + 0.8 * clamp(vel / 127, 0, 1);
+      const fresh = this.stage === 0;
+      this.stage = 1; this.held = true; this.age = ++e.ageCounter;
+      const T0 = e.osTimeBase;
+      if (fresh) {
+        this.env = 0;
+        for (const t of this.tym) t.reset();
+        this.b0r = this.b0i = this.b1r = this.b1i = this.b2r = this.b2i = 0; this.lp = 0; this.pk2 = 0;
+        this.kc = 0; this.lockFrac = 0; this.rubF = this.rubT = 1; this.rubLeft = 0; this.fallU = 0;
+        this.apX.fill(0); this.apY.fill(0); this.hpX = this.hpY = 0;
+        e.voicePitch(this);
+        for (const t of this.tym) t.retune(e.outF, e.outQ);
+      }
+      // the muscle (re)starts with the next block, with a new echeme or phrase
+      if (!this.muscleOn || this.nextCycle === Infinity) {
+        this.nextCycle = T0; this.uEnd = -Infinity; this.burstIdx = 0;
+      }
+      this.muscleOn = true;
+    }
+    release() { if (this.stage !== 0) { this.stage = 4; this.held = false; } }
+
+    // envelope, once per block: effort for the strokes that start in it
+    stepEnvelope() {
+      const e = this.e, m = e.m, dt = BLOCK / e.sr;
+      const sus = m[PINDEX.sustain];
+      if (this.stage === 1) { this.env += dt / Math.max(1e-4, m[PINDEX.attack]); if (this.env >= 1) { this.env = 1; this.stage = 2; } }
+      else if (this.stage === 2) { this.env = sus + (this.env - sus) * Math.exp(-4 * dt / m[PINDEX.decay]); if (Math.abs(this.env - sus) < 1e-4) { this.env = sus; this.stage = 3; } }
+      else if (this.stage === 4) { this.env *= Math.exp(-4 * dt / m[PINDEX.release]); }
+      this.effortNow = this.env * this.vel;
+      if (this.stage === 4 && this.effortNow < STOP_EFFORT) this.muscleOn = false;
+    }
+
+    // a new echeme or phrase starts at T: its length (Jitter and Rubato, or snapped to the beat with Sync)
+    newUnit(T) {
+      const e = this.e, sr = e.srOS;
+      let on, off;
+      if (e.song === SONG_ECHEME) { on = e.echemeT; off = e.gapT; } else { on = e.phraseT; off = e.restT; }
+      if (!e.sync) {                             // (with Sync the beat grid wins over Time)
+        on *= this.rubF * this.jit() * this.timeF; off *= this.rubF * this.timeF;
+        this.rubT = Math.exp(e.rubato * RUBATO_SD * this.gauss());
+      }
+      this.uStart = T; this.uOn = T + Math.max(1, on * sr); this.uEnd = this.uOn + off * sr;
+      this.uFirst = true; this.burstIdx = 0;
+    }
+    gauss() { let s = this.rand(); s += this.rand(); s += this.rand(); s += this.rand(); return (s - 2) * 1.7320508; }
+    // a timing factor with Jitter: 1 ± 0.3·Jitter (one SD), clipped at two
+    jit() {
+      const sd = JITTER_SD * this.e.jitter;
+      return sd > 0 ? clamp(1 + sd * this.gauss(), 1 - 2 * sd, 1 + 2 * sd) : 1;
+    }
+    // where the phrase is (0–1 through its sound part), or −1 outside a phrase
+    phrasePos(T) {
+      if (this.e.song !== SONG_PHRASE || this.uEnd === -Infinity) return -1;
+      return (T - this.uStart) / (this.uOn - this.uStart);
+    }
+    // the note as a pulse rate (Rate mode) or carrier (Carrier mode), before the 4 octaves, in Hz
+    noteHz() {
+      const e = this.e;
+      return Math.pow(2, this.logF + e.bendOct - FALL_ST * e.fall * this.fallU / 12);
+    }
+
+    // the muscle clock: one cycle starts at T; issue both tymbals' strokes and schedule the next
+    cycleFire(T) {
+      const e = this.e;
+      if (!this.muscleOn) { this.nextCycle = Infinity; return; }
+      if (e.song !== SONG_CONT && T >= this.uEnd - 1e-6) this.newUnit(T);
+      // rate: the note (Rate mode) or the Rate knob with Heat (Carrier mode), the intro, Rubato
+      let hz = e.playmode === 1 ? this.noteHz() / (e.tymOn[0] && e.tymOn[1] ? 2 : 1) : e.rateNow * e.heatF / this.timeF;
+      const p = this.phrasePos(T);
+      if (p >= 0 && p < e.intro) hz *= Math.pow(e.start, 1 - Math.pow(p / e.intro, INTRO_POW));
+      hz = clamp(hz * this.rubF, 0.05, RATE_MAX);
+      let C = e.srOS / hz, force = 1;
+      if (e.drive === 1) {                       // Async: one command per burst, the force runs down
+        if (this.burstIdx === 0) this.burstJ = this.jit();
+        C *= this.burstJ;
+        force = 1 - ASYNC_RUNDOWN * this.burstIdx / Math.max(1, e.burst);
+        this.burstIdx = (this.burstIdx + 1) % e.burst;
+      } else C *= this.jit();
+      if (p >= 0) force *= dbToGain(-FALL_DB * e.fall * clamp((p - (1 - FALL_SHARE)) / FALL_SHARE, 0, 1));
+      // in an echeme or phrase, a stroke must fit before its sound part ends (the first always sounds)
+      if (e.song !== SONG_CONT && !this.uFirst && T + C > this.uOn + 1e-6) { this.nextCycle = Math.max(this.uEnd, T + 1); return; }
+      this.uFirst = false;
+      for (let s = 0; s < 2; s++) {
+        if (!e.tymOn[s]) continue;
+        const t = this.tym[s];
+        t.nextStroke = T + (s && e.tymOn[0] ? e.lrphase * C : 0);
+        t.pendC = C; t.pendF = force;
+      }
+      this.nextCycle = T + C;
+      this.cycleNow = C;
+    }
+
+    // once per block: Time and Link, Rubato drifts, the phrase position sets the fall
+    songBlock(t0) {
+      const e = this.e, dt = BLOCK / e.sr;
+      // Link: in Carrier mode each octave below the preset's middle C doubles every time, like tape
+      this.timeF = e.timeK;
+      if (e.link > 0 && e.playmode === 0) this.timeF *= Math.pow(2, e.link * (e.refLog - (this.logF + e.bendOct)));
+      if (e.song === SONG_CONT && --this.rubLeft <= 0) {
+        this.rubT = Math.exp(e.rubato * RUBATO_SD * this.gauss());
+        this.rubLeft = Math.round(0.3 / dt);
+      }
+      if (e.rubato <= 0) this.rubT = 1;
+      this.rubF += (this.rubT - this.rubF) * (1 - Math.exp(-dt / RUBATO_TAU));
+      const p = this.phrasePos(t0);
+      this.fallU = p >= 0 ? clamp((p - (1 - FALL_SHARE)) / FALL_SHARE, 0, 1) : 0;
+    }
+
+    // the lock: move rib i of tymbal tym towards the next moment its click adds in phase with the
+    // reference (the body's main mode, or with an Open body the tymbal's own ringing)
+    decide(tym, i, sNow) {
+      const e = this.e;
+      let xr, xi, om, r, pk2;
+      if (e.bodyOn) { xr = this.b0r; xi = this.b0i; om = this.om0; r = this.r0; pk2 = this.pk2; }
+      else { xr = tym.zr + tym.wr; xi = tym.zi + tym.wi; om = tym.om; r = tym.rr; pk2 = tym.pk2; }
+      const tn = tym.evT[i];
+      let t = tn, locked = 0;
+      if (pk2 > 1e-24 && om > 0 && e.lockW > 0) {
+        const ph = Math.atan2(xi, xr) + om * (tn - sNow);
+        // aim a little early: averaged over its slow start, the click is in phase with the reference
+        let dph = CLICK_PHASE - LOCK_AIM - ph; dph -= TWO_PI * Math.round(dph / TWO_PI);
+        const tstar = tn + dph / om;
+        const amp2 = (xr * xr + xi * xi) * Math.pow(r, 2 * (tstar - sNow));
+        if (amp2 >= LOCK_GATE * LOCK_GATE * pk2) {
+          const w = e.lockW * Math.PI / om;      // up to half a period, less as Stiffness rises
+          t = tn + clamp(tstar - tn, -w, w);
+          if (Math.abs(tstar - tn) <= w + 1e-9) { e.stats.locked++; locked = 1; tym.evLock[i] = 1; }
+        }
+      }
+      this.lockFrac += 0.05 * (locked - this.lockFrac);
+      tym.evT[i] = Math.max(t, sNow + 1e-6);
+    }
+
+    // pitch keeper: compare the body's phase advance over the block with the note's
+    keep(s0r, s0i, nOS) {
+      const e = this.e;
+      if (!e.bodyOn || this.lockFrac < KEEP_LOCKED) { this.kc *= 0.995; return; }
+      const a0 = s0r * s0r + s0i * s0i, a1 = this.b0r * this.b0r + this.b0i * this.b0i;
+      if (a0 < 1e-12 || a1 < 1e-12 || a1 < 1e-4 * this.pk2) return;
+      // advance = arg(b_end · conj(b_start)), against the note's ω over the block (both wrapped)
+      const adv = Math.atan2(this.b0i * s0r - this.b0r * s0i, this.b0r * s0r + this.b0i * s0i);
+      let err = adv - this.omNote * nOS; err -= TWO_PI * Math.round(err / TWO_PI);
+      err = clamp(err, -0.3, 0.3);
+      this.kc = clamp(this.kc - KEEP_RATE * err / (this.omNote * nOS) / Math.LN2, -KEEP_MAX, KEEP_MAX);
+    }
+
+    // nothing is ringing: tymbals and body all at zero (between phrases, after a note)
+    silent() {
+      const a = this.tym[0], b = this.tym[1];
+      return a.zr === 0 && a.zi === 0 && a.wr === 0 && a.wi === 0 && b.zr === 0 && b.zi === 0 && b.wr === 0 && b.wi === 0 &&
+        this.b0r === 0 && this.b0i === 0 && this.b1r === 0 && this.b1i === 0 && this.b2r === 0 && this.b2i === 0 && this.lp === 0 &&
+        this.hpY === 0 && this.apY[AP_STAGES - 1] === 0 && this.apX[0] === 0;
+    }
+
+    // run tymbals and body over [j0, j1)
+    run(j0, j1, oL, oR) {
+      const e = this.e;
+      if (this.silent()) return;                 // silence adds nothing; skip the per-sample loops
+      const t0 = this.tym[0], t1 = this.tym[1];
+      t0.advance(j0, j1, this.sRe, this.sIm, this.dL, this.dR, e.panL[0], e.panR[0]);
+      t1.advance(j0, j1, this.sRe, this.sIm, this.dL, this.dR, e.panL[1], e.panR[1]);
+      const sRe = this.sRe, sIm = this.sIm, dL = this.dL, dR = this.dR;
+      if (e.plantOn) { this.runPlant(j0, j1, oL, oR); return; }
+      if (e.bladderOn) { this.runBladder(j0, j1, oL, oR); return; }
+      if (!e.bodyOn) {
+        for (let j = j0; j < j1; j++) { oL[j] += dL[j]; oR[j] += dR[j]; }
+        return;
+      }
+      let b0r = this.b0r, b0i = this.b0i, b1r = this.b1r, b1i = this.b1i, b2r = this.b2r, b2i = this.b2i, lp = this.lp, pk2 = this.pk2;
+      const c0r = this.c0r, c0i = this.c0i, g0 = this.g0, c1r = this.c1r, c1i = this.c1i, g1 = this.g1, c2r = this.c2r, c2i = this.c2i, g2 = this.g2;
+      const k = this.kLP, lvl = this.bodyLevel, dir = e.direct, pdec = e.pkDec;
+      for (let j = j0; j < j1; j++) {
+        const ur = sRe[j], ui = sIm[j];
+        let n = b0r * c0r - b0i * c0i + g0 * ur; b0i = b0r * c0i + b0i * c0r + g0 * ui; b0r = n;
+        n = b1r * c1r - b1i * c1i + g1 * ur; b1i = b1r * c1i + b1i * c1r + g1 * ui; b1r = n;
+        n = b2r * c2r - b2i * c2i + g2 * ur; b2i = b2r * c2i + b2i * c2r + g2 * ui; b2r = n;
+        lp += k * (b0r + b1r + b2r - lp);
+        const y = lp * lvl;
+        oL[j] += y + dir * dL[j]; oR[j] += y + dir * dR[j];
+        const a2 = b0r * b0r + b0i * b0i; pk2 *= pdec; if (a2 > pk2) pk2 = a2;
+      }
+      if (b0r * b0r + b0i * b0i < 1e-30) { b0r = 0; b0i = 0; }
+      if (b1r * b1r + b1i * b1i < 1e-30) { b1r = 0; b1i = 0; }
+      if (b2r * b2r + b2i * b2i < 1e-30) { b2r = 0; b2i = 0; }
+      if (lp * lp < 1e-30) lp = 0;
+      if (pk2 < 1e-30) pk2 = 0;
+      this.b0r = b0r; this.b0i = b0i; this.b1r = b1r; this.b1i = b1i; this.b2r = b2r; this.b2i = b2i; this.lp = lp; this.pk2 = pk2;
+    }
+
+    // Plant: the tymbals' sum through the dispersive chain, then the stem's three bending modes and
+    // the dispersed wave itself, then the contact colour; mono, centred
+    runPlant(j0, j1, oL, oR) {
+      const e = this.e, sRe = this.sRe, apX = this.apX, apY = this.apY, a = this.apA;
+      let b0r = this.b0r, b0i = this.b0i, b1r = this.b1r, b1i = this.b1i, b2r = this.b2r, b2i = this.b2i;
+      const c0r = this.c0r, c0i = this.c0i, g0 = this.g0, c1r = this.c1r, c1i = this.c1i, g1 = this.g1, c2r = this.c2r, c2i = this.c2i, g2 = this.g2;
+      let hx = this.hpX, hy = this.hpY;
+      const kh = this.kHP, lvl = this.bodyLevel;
+      for (let j = j0; j < j1; j++) {
+        let x = sRe[j];
+        for (let s = 0; s < AP_STAGES; s++) { const y = a * x + apX[s] - a * apY[s]; apX[s] = x; apY[s] = y; x = y; }
+        let n = b0r * c0r - b0i * c0i + g0 * x; b0i = b0r * c0i + b0i * c0r; b0r = n;
+        n = b1r * c1r - b1i * c1i + g1 * x; b1i = b1r * c1i + b1i * c1r; b1r = n;
+        n = b2r * c2r - b2i * c2i + g2 * x; b2i = b2r * c2i + b2i * c2r; b2r = n;
+        const v = (b0r + b1r + b2r + STEM_DIRECT * x) * lvl;
+        const y = kh * (hy + v - hx); hx = v; hy = y;   // one-pole high-pass
+        oL[j] += y; oR[j] += y;
+      }
+      // flush what has died away (the chain's states together, so silent() can test one of them)
+      let quiet = true;
+      for (let s = 0; s < AP_STAGES; s++) if (apX[s] * apX[s] + apY[s] * apY[s] >= 1e-30) { quiet = false; break; }
+      if (quiet) { apX.fill(0); apY.fill(0); }
+      if (b0r * b0r + b0i * b0i < 1e-30) { b0r = 0; b0i = 0; }
+      if (b1r * b1r + b1i * b1i < 1e-30) { b1r = 0; b1i = 0; }
+      if (b2r * b2r + b2i * b2i < 1e-30) { b2r = 0; b2i = 0; }
+      if (hy * hy + hx * hx < 1e-30) { hx = 0; hy = 0; }
+      this.b0r = b0r; this.b0i = b0i; this.b1r = b1r; this.b1i = b1i; this.b2r = b2r; this.b2i = b2i; this.hpX = hx; this.hpY = hy;
+    }
+
+    // Bladder: the tymbals drive one air sac; its three panels (b0 left tergites, b1 right, b2 the
+    // sternites) each ring at their own pitch (Split) and radiate in phase from their own place
+    runBladder(j0, j1, oL, oR) {
+      const e = this.e, sRe = this.sRe, sIm = this.sIm, dL = this.dL, dR = this.dR;
+      let b0r = this.b0r, b0i = this.b0i, b1r = this.b1r, b1i = this.b1i, b2r = this.b2r, b2i = this.b2i, pk2 = this.pk2;
+      const c0r = this.c0r, c0i = this.c0i, g0 = this.g0, c1r = this.c1r, c1i = this.c1i, g1 = this.g1, c2r = this.c2r, c2i = this.c2i, g2 = this.g2;
+      const lvl = this.bodyLevel, dir = e.direct, pdec = e.pkDec, pL = e.blPanL, pR = e.blPanR, vc = BL_VENTRAL;
+      for (let j = j0; j < j1; j++) {
+        const ur = sRe[j], ui = sIm[j];
+        let n = b0r * c0r - b0i * c0i + g0 * ur; b0i = b0r * c0i + b0i * c0r + g0 * ui; b0r = n;
+        n = b1r * c1r - b1i * c1i + g1 * ur; b1i = b1r * c1i + b1i * c1r + g1 * ui; b1r = n;
+        n = b2r * c2r - b2i * c2i + g2 * ur; b2i = b2r * c2i + b2i * c2r + g2 * ui; b2r = n;
+        const mid = vc * b2r;
+        oL[j] += lvl * (pL * b0r + pR * b1r + mid) + dir * dL[j];
+        oR[j] += lvl * (pR * b0r + pL * b1r + mid) + dir * dR[j];
+        const a2 = b0r * b0r + b0i * b0i; pk2 *= pdec; if (a2 > pk2) pk2 = a2;
+      }
+      if (b0r * b0r + b0i * b0i < 1e-30) { b0r = 0; b0i = 0; }
+      if (b1r * b1r + b1i * b1i < 1e-30) { b1r = 0; b1i = 0; }
+      if (b2r * b2r + b2i * b2i < 1e-30) { b2r = 0; b2i = 0; }
+      if (pk2 < 1e-30) pk2 = 0;
+      this.b0r = b0r; this.b0i = b0i; this.b1r = b1r; this.b1i = b1i; this.b2r = b2r; this.b2i = b2i; this.pk2 = pk2;
+    }
+
+    render(nOS, oL, oR) {
+      const e = this.e;
+      if (this.glideLeft > 0) { this.logF += this.glideStep; this.glideLeft--; }
+      const t0 = e.osTimeBase;
+      this.stepEnvelope();
+      this.songBlock(t0);
+      e.voicePitch(this);
+      this.sRe.fill(0); this.sIm.fill(0); this.dL.fill(0); this.dR.fill(0);
+      const s0r = this.b0r, s0i = this.b0i;
+      let j = 0;
+      for (;;) {
+        // the muscle clock first on a tie, so a stroke it issues can start at the same moment
+        let tb = this.muscleOn ? this.nextCycle : Infinity, which = null;
+        const x0 = this.tym[0].nextTime(), x1 = this.tym[1].nextTime();
+        if (x0 < tb) { tb = x0; which = this.tym[0]; }
+        if (x1 < tb) { tb = x1; which = this.tym[1]; }
+        const rel = tb - t0;
+        if (rel >= nOS) { this.run(j, nOS, oL, oR); break; }
+        const upto = Math.min(nOS, Math.max(j, Math.ceil(rel)));
+        if (upto > j) { this.run(j, upto, oL, oR); j = upto; }
+        if (j >= nOS) break;
+        if (which) which.step(t0 + j - 1, clamp(rel - (j - 1), 1e-9, 1));
+        else this.cycleFire(tb);
+      }
+      this.keep(s0r, s0i, nOS);
+      // done: the muscle has stopped and everything has rung out
+      const busy = this.tym[0].iEv < this.tym[0].nEv || this.tym[1].iEv < this.tym[1].nEv;
+      if (!this.muscleOn && !busy && this.tym[0].energy() + this.tym[1].energy() + this.bodyEnergy() < 1e-14) {
+        this.stage = 0; this.note = -1; this.held = false;
+        this.tym[0].reset(); this.tym[1].reset();
+      }
+      this.fNow = e.fCarrier;
+    }
+  }
+
+  /* ---------- engine ---------- */
+  class TymbalEngine {
+    constructor(sampleRate, seed) {
+      this.sr = sampleRate; this.srOS = sampleRate * OS;
+      this.p = new Float64Array(PARAMS.length);
+      PARAMS.forEach((d, i) => { this.p[i] = d.def; });
+      this.m = Float64Array.from(this.p);          // effective values (LFOs later)
+      this.fir = makeFir();
+      this.histL = new Float32Array(FIR_LEN * 2); this.histR = new Float32Array(FIR_LEN * 2); this.hw = 0;
+      this.osL = new Float32Array(BLOCK * OS); this.osR = new Float32Array(BLOCK * OS);
+      this.blkL = new Float32Array(BLOCK); this.blkR = new Float32Array(BLOCK); this.blkPos = BLOCK;
+      this.ribF = new Float64Array(MAX_RIBS + 1); this.ribQ = new Float64Array(MAX_RIBS + 1); this.ribGain = new Float64Array(MAX_RIBS + 1);
+      this.panL = new Float64Array(2); this.panR = new Float64Array(2); this.tymOn = new Uint8Array(2);
+      this.ageCounter = 0; this.quietBlocks = 0;
+      this.stack = [];
+      this.bendNorm = 0; this.tempo = 120; this.aftertouch = 0;
+      this.dc = { xl: 0, yl: 0, xr: 0, yr: 0, R: 1 - 2 * Math.PI * 10 / sampleRate };
+      this.osTimeBase = 0; this.onsets = null;
+      this.stats = { ins: 0, locked: 0 };
+      this.vT = new Float64Array(VIEW_N); this.vS = new Uint8Array(VIEW_N); this.vK = new Uint8Array(VIEW_N); this.vN = 0;
+      this.pkDec = Math.exp(-2 / (PEAK_TAU * this.srOS));
+      const base = (seed >>> 0) || 0x9e3779b9;
+      this.voices = [];
+      for (let i = 0; i < MAX_VOICES; i++) this.voices.push(new Voice(this, (base + i * 0x6d2b79f5) >>> 0));
+      this.updateControls();
+      this.info = { voices: 0, carrier: 0, rib: 0, f: 0, q: 0, pulses: 0, lock: 0, keeper: 0, time: 1, effort: 0 };
+    }
+
+    static get LATENCY() { return BLOCK; }
+    static get PARAMS() { return PARAMS; }
+
+    setParam(id, v) {
+      const i = PINDEX[id];
+      if (i === undefined || !Number.isFinite(v)) return;
+      const d = PARAMS[i];
+      this.p[i] = clamp(d.step ? Math.round(v / d.step) * d.step : v, d.min, d.max);
+      if (id === 'mode') this.allNotesOff();
+    }
+    getParam(id) { return this.p[PINDEX[id]]; }
+    setBend(norm) { this.bendNorm = clamp(norm, -1, 1); }
+    setTempo(bpm) { this.tempo = clamp(bpm, 20, 400); }
+    setAftertouch(norm) { this.aftertouch = clamp(norm, 0, 1); }   // opens the opercula from Aperture towards 1
+
+    noteOn(note, vel) {
+      if (vel <= 0) { this.noteOff(note); return; }
+      this.m.set(this.p); this.updateControls();
+      if (this.p[PINDEX.mode] === 0) {
+        const v = this.voices[0];
+        const i = this.stack.indexOf(note); if (i >= 0) this.stack.splice(i, 1);
+        this.stack.push(note);
+        const legato = v.active() && v.held;
+        v.setTarget(note, legato);
+        if (!legato) v.trigger(vel);
+        else v.vel = 0.2 + 0.8 * clamp(vel / 127, 0, 1);
+        return;
+      }
+      for (const v of this.voices) if (v.active() && v.note === note) { v.setTarget(note, false); v.trigger(vel); return; }
+      let pick = null;
+      for (const v of this.voices) if (!v.active()) { pick = v; break; }
+      if (!pick) { for (const v of this.voices) if (!v.held && (!pick || v.age < pick.age)) pick = v; }
+      if (!pick) { for (const v of this.voices) if (!pick || v.age < pick.age) pick = v; }
+      pick.setTarget(note, false);
+      pick.trigger(vel);
+    }
+    noteOff(note) {
+      if (this.p[PINDEX.mode] === 0) {
+        const i = this.stack.indexOf(note); if (i >= 0) this.stack.splice(i, 1);
+        const v = this.voices[0];
+        if (!v.active() || v.note !== note) return;
+        if (this.stack.length) v.setTarget(this.stack[this.stack.length - 1], true);
+        else v.release();
+        return;
+      }
+      for (const v of this.voices) if (v.note === note && v.held) v.release();
+    }
+    allNotesOff() { this.stack.length = 0; for (const v of this.voices) v.release(); }
+
+    // per-block control values shared by all voices
+    updateControls() {
+      const P = this.m;
+      this.heatF = Math.pow(HEAT_BASE, (P[PINDEX.heat] - 30) / 15);
+      this.rateNow = P[PINDEX.rate];
+      this.playmode = Math.round(P[PINDEX.playmode]);
+      this.drive = Math.round(P[PINDEX.drive]);
+      this.burst = Math.round(P[PINDEX.burst]);
+      // song: lengths in seconds; Sync snaps an echeme period to a beat division, a phrase period to
+      // whole beats in powers of two, keeping the sound share
+      this.song = Math.round(P[PINDEX.song]);
+      this.sync = P[PINDEX.sync] >= 0.5;
+      this.jitter = P[PINDEX.jitter]; this.rubato = P[PINDEX.rubato];
+      this.start = P[PINDEX.start]; this.intro = P[PINDEX.intro]; this.fall = P[PINDEX.fall];
+      let eOn = P[PINDEX.echeme], eOff = P[PINDEX.gap], pOn = P[PINDEX.phrase], pOff = P[PINDEX.rest];
+      if (this.sync) {
+        const beat = 60 / this.tempo;
+        const want = (eOn + eOff) / beat;
+        let best = ECHEME_BEATS[0], bd = Infinity;
+        for (const b of ECHEME_BEATS) { const d = Math.abs(Math.log(b / want)); if (d < bd) { bd = d; best = b; } }
+        const ke = best / want; eOn *= ke; eOff *= ke;
+        const pb = Math.pow(2, clamp(Math.round(Math.log2((pOn + pOff) / beat)), 0, 6));
+        const kp = pb / ((pOn + pOff) / beat); pOn *= kp; pOff *= kp;
+      }
+      this.echemeT = eOn; this.gapT = eOff; this.phraseT = pOn; this.restT = pOff;
+      this.hold = P[PINDEX.hold];
+      this.ribs = Math.round(P[PINDEX.ribs]);
+      this.recruit = Math.min(this.ribs, Math.round(P[PINDEX.recruit]));
+      this.spacingS = P[PINDEX.spacing] / 1000 * this.srOS;
+      this.leadS = P[PINDEX.lead] / 1000 * this.srOS;
+      this.outclicks = P[PINDEX.outclicks];
+      this.outspeed = P[PINDEX.outspeed];
+      this.outGain = dbToGain(P[PINDEX.outlevel]);
+      this.vol = dbToGain(P[PINDEX.volume]);
+      this.bendOct = this.bendNorm * P[PINDEX.bendrange] / 12;
+      // Stiffness: the lock window, click level and Lead (the tensor muscle in Cystosoma)
+      const stiff = P[PINDEX.stiffness];
+      this.lockW = 1 - stiff;
+      this.stiffGain = dbToGain(STIFF_DB * (stiff - 0.6));
+      this.leadF = 1.6 - stiff;
+      this.scatter = P[PINDEX.scatter];
+      // the two tymbals
+      this.lrphase = P[PINDEX.lrphase];
+      const pair = Math.round(P[PINDEX.pair]);
+      this.tymOn[0] = pair !== 2 ? 1 : 0; this.tymOn[1] = pair !== 1 ? 1 : 0;
+      const asym = P[PINDEX.asym];
+      this.asymF = Math.pow(2, asym * 0.5 / 12); this.asymG = dbToGain(-6 * asym);
+      const sp = P[PINDEX.spread];
+      for (let s = 0; s < 2; s++) {
+        const pan = 0.5 + (s ? 0.25 : -0.25) * sp;
+        this.panL[s] = Math.cos(pan * Math.PI / 2) * Math.SQRT2; this.panR[s] = Math.sin(pan * Math.PI / 2) * Math.SQRT2;
+      }
+      // body: Bladder sounds as Helmholtz until batch 07, Plant as Open until batch 06
+      const bt = Math.round(P[PINDEX.body]);
+      this.bodyOn = bt === BODY_HELMHOLTZ || bt === BODY_BLADDER;
+      this.plantOn = bt === BODY_PLANT;
+      this.bladderOn = bt === BODY_BLADDER;
+      { const pan = 0.5 - BL_PAN * P[PINDEX.spread];       // the left panel's place; the right one mirrors it
+        this.blPanL = Math.cos(pan * Math.PI / 2) * Math.SQRT2; this.blPanR = Math.sin(pan * Math.PI / 2) * Math.SQRT2; }
+      // Time, and the pitch Link measures from: the preset's middle C
+      this.timeK = P[PINDEX.time]; this.link = P[PINDEX.link];
+      this.refLog = Math.log2(440) + (60 - 69 + P[PINDEX.transpose] + P[PINDEX.detune] / 100) / 12;
+      this.direct = P[PINDEX.direct];
+      // rib levels: rib 2 is the reference (0 dB); later ribs follow taper along u²
+      const n = this.ribs, taper = P[PINDEX.taper];
+      this.ribGain[1] = dbToGain(P[PINDEX.firstlevel]);
+      for (let k = 2; k <= n; k++) { const u = n > 2 ? (k - 2) / (n - 2) : 0; this.ribGain[k] = dbToGain(taper * u * u); }
+    }
+
+    // a voice's carrier: rib frequencies and Qs (rib 2 sits on the tuned carrier, rib 1 at First,
+    // later ribs fall along tilt·u²; Q follows 1/f) and its body's coefficients
+    voicePitch(v) {
+      const P = this.m;
+      // Carrier mode: the note, 4 octaves up; Rate mode: the Carrier knob. Fall lowers it near a phrase's end.
+      let f = this.playmode === 1 ? P[PINDEX.carrier] * Math.pow(2, -FALL_ST * this.fall * v.fallU / 12)
+        : v.noteHz() * Math.pow(2, CARRIER_OCT);
+      while (f > F_CAP) f *= 0.5;
+      if (f < F_MIN) f = F_MIN;
+      this.fCarrier = f;
+      v.omNote = TWO_PI * f / this.srOS;
+      f *= Math.pow(2, v.kc);                    // the pitch keeper's correction
+      const ft = f * Math.pow(2, P[PINDEX.tune] / 12), q0 = P[PINDEX.tymbalq];
+      const n = this.ribs, tilt = P[PINDEX.tilt];
+      // every resonator stays within 20 Hz–16 kHz (the guard); Q follows the unclamped 1/f
+      this.ribF[1] = ft * Math.pow(2, P[PINDEX.first] / 12);
+      for (let k = 2; k <= n; k++) { const u = n > 2 ? (k - 2) / (n - 2) : 0; this.ribF[k] = ft * Math.pow(2, tilt * u * u / 12); }
+      for (let k = 1; k <= n; k++) { this.ribQ[k] = q0 * ft / this.ribF[k]; this.ribF[k] = clamp(this.ribF[k], F_MIN, F_CAP); }
+      this.outF = ft * P[PINDEX.outratio];
+      this.outQ = q0 * ft / this.outF;
+      this.outF = clamp(this.outF, F_MIN, F_CAP);
+      const srOS = this.srOS;
+      if (this.plantOn) {
+        // the stem's bending modes at Stem × 1, 2.76, 5.40 with Body Q; the chain's coefficient from Distance
+        v.periodS = srOS / f; v.halfT = 0.5 * v.periodS;
+        const q = P[PINDEX.bodyq], stem = P[PINDEX.stem];
+        let fr = stem, om = TWO_PI * Math.min(fr, 0.45 * srOS) / srOS, r = Math.exp(-Math.PI * fr / (q * srOS));
+        v.c0r = r * Math.cos(om); v.c0i = r * Math.sin(om); v.g0 = (1 - r) * STEM_GAINS[0];
+        fr = Math.min(stem * STEM_RATIOS[1], F_CAP); om = TWO_PI * fr / srOS; r = Math.exp(-Math.PI * fr / (q * srOS));
+        v.c1r = r * Math.cos(om); v.c1i = r * Math.sin(om); v.g1 = (1 - r) * STEM_GAINS[1];
+        fr = Math.min(stem * STEM_RATIOS[2], F_CAP); om = TWO_PI * fr / srOS; r = Math.exp(-Math.PI * fr / (q * srOS));
+        v.c2r = r * Math.cos(om); v.c2i = r * Math.sin(om); v.g2 = (1 - r) * STEM_GAINS[2];
+        const d = Math.max(1, P[PINDEX.distance] * DISP_MAX * srOS / AP_STAGES);   // low-frequency delay per stage, samples
+        v.apA = -(d - 1) / (d + 1);              // pole at +(d − 1)/(d + 1): the delay sits at low frequencies
+        v.kHP = 1 / (1 + TWO_PI * CONTACT_HZ / srOS);
+        v.bodyLevel = PLANT_GAIN;
+        return;
+      }
+      if (!this.bodyOn) { v.periodS = srOS / f; v.halfT = 0.5 * v.periodS; return; }
+      if (this.bladderOn) {
+        // Extend raises pitch (815 → 900 Hz), Q (4 → 9) and level (×2); Split detunes the side panels
+        const ex = P[PINDEX.extend], sp = Math.pow(2, BL_SPLIT_ST * P[PINDEX.split] / 12);
+        const fb = f * Math.pow(BL_F_REST, 1 - ex), qb = P[PINDEX.bodyq] * (BL_Q_REST + (1 - BL_Q_REST) * ex);
+        v.periodS = srOS / fb; v.halfT = 0.5 * v.periodS;
+        let fr = fb * sp, om = TWO_PI * Math.min(fr, 0.45 * srOS) / srOS, r = Math.exp(-Math.PI * fr / (qb * srOS));
+        v.c0r = r * Math.cos(om); v.c0i = r * Math.sin(om); v.g0 = 1 - r; v.om0 = om; v.r0 = r;
+        fr = fb / sp; om = TWO_PI * Math.min(fr, 0.45 * srOS) / srOS; r = Math.exp(-Math.PI * fr / (qb * srOS));
+        v.c1r = r * Math.cos(om); v.c1i = r * Math.sin(om); v.g1 = 1 - r;
+        fr = fb; om = TWO_PI * Math.min(fr, 0.45 * srOS) / srOS; r = Math.exp(-Math.PI * fr / (qb * srOS));
+        v.c2r = r * Math.cos(om); v.c2i = r * Math.sin(om); v.g2 = 1 - r;
+        // two side panels and the sternites: normalised so the sum matches one Helmholtz mode
+        v.bodyLevel = BODY_GAIN * (BL_LVL_REST + (1 - BL_LVL_REST) * ex) / (2 + BL_VENTRAL) * 2;
+        return;
+      }
+      // Helmholtz body: Aperture moves pitch, Q and level as the opercula do; Membrane raises Q
+      const ap0 = P[PINDEX.aperture], ap = ap0 + (1 - ap0) * this.aftertouch, mem = P[PINDEX.membrane];
+      const fb = f * Math.pow(AP_F_CLOSED, 1 - ap);
+      const qb = P[PINDEX.bodyq] * (AP_Q_CLOSED + (1 - AP_Q_CLOSED) * ap) * (1 + MEMBRANE_Q * mem);
+      v.periodS = srOS / fb;
+      v.halfT = 0.5 * v.periodS;
+      // each mode: pole r·e^{iω}, input gain (1 − r)·level (unity at its peak); no allocation
+      const cav = dbToGain(-25 + 25 * P[PINDEX.cavity]);
+      let fr = fb, om = TWO_PI * Math.min(fr, 0.45 * srOS) / srOS, r = Math.exp(-Math.PI * fr / (qb * srOS));
+      v.c0r = r * Math.cos(om); v.c0i = r * Math.sin(om); v.g0 = 1 - r; v.om0 = om; v.r0 = r;
+      fr = fb * CAVITY_RATIOS[0]; om = TWO_PI * Math.min(fr, 0.45 * srOS) / srOS; r = Math.exp(-Math.PI * fr / (qb * srOS));
+      v.c1r = r * Math.cos(om); v.c1i = r * Math.sin(om); v.g1 = (1 - r) * cav;
+      fr = fb * CAVITY_RATIOS[1]; om = TWO_PI * Math.min(fr, 0.45 * srOS) / srOS; r = Math.exp(-Math.PI * fr / (qb * srOS));
+      v.c2r = r * Math.cos(om); v.c2i = r * Math.sin(om); v.g2 = (1 - r) * cav;
+      v.kLP = 1 - Math.exp(-TWO_PI * Math.min(2 * fb, 0.4 * this.srOS) / this.srOS);
+      v.bodyLevel = BODY_GAIN * dbToGain(AP_DB_CLOSED * Math.pow(1 - ap, 1.5) + MEMBRANE_DB * mem);
+    }
+
+    processBlock() {
+      const d = this.dc;
+      let any = false;
+      for (let i = 0; i < MAX_VOICES; i++) if (this.voices[i].stage !== 0) { any = true; break; }
+      if (!any && this.quietBlocks > 1 && Math.abs(d.yl) + Math.abs(d.xl) + Math.abs(d.yr) + Math.abs(d.xr) < 1e-12) {
+        this.blkL.fill(0); this.blkR.fill(0); d.xl = d.yl = d.xr = d.yr = 0;
+        this.osTimeBase += BLOCK * OS;
+        this.info.voices = 0; this.info.idle = true;
+        return;
+      }
+      this.m.set(this.p);
+      this.updateControls();
+      const nOS = BLOCK * OS, oL = this.osL, oR = this.osR;
+      oL.fill(0); oR.fill(0);
+      let count = 0, newest = -1;
+      for (let i = 0; i < MAX_VOICES; i++) {
+        const v = this.voices[i];
+        if (v.stage === 0) continue;
+        v.render(nOS, oL, oR);
+        count++;
+        if (v.age > newest) {
+          newest = v.age; this.info.carrier = v.fNow; this.info.rib = v.tym[0].state; this.info.f = v.tym[0].lastF; this.info.q = v.tym[0].lastQ;
+          // pulses per second (both tymbals), the recent lock share, the keeper's correction, Time × Link
+          const both = this.tymOn[0] && this.tymOn[1] ? 2 : 1;
+          this.info.pulses = v.cycleNow > 0 ? both * this.srOS / v.cycleNow : 0;
+          this.info.lock = v.lockFrac; this.info.keeper = v.kc * 1200; this.info.time = v.timeF; this.info.effort = v.effortNow;
+        }
+      }
+      this.osTimeBase += nOS;
+      this.info.voices = count; this.info.idle = false;
+      this.quietBlocks = count === 0 ? this.quietBlocks + 1 : 0;
+      // decimate (symmetric FIR) both channels, DC block, volume, clip
+      const L = FIR_LEN, H = FIR_LEN / 2, h = this.fir, hl = this.histL, hr = this.histR, vol = this.vol;
+      let hw = this.hw;
+      for (let j = 0, o = 0; j < BLOCK; j++) {
+        for (let q = 0; q < OS; q++, o++) {
+          hl[hw] = hl[hw + L] = oL[o]; hr[hw] = hr[hw + L] = oR[o];
+          hw = hw + 1 === L ? 0 : hw + 1;
+        }
+        let al = 0, ar = 0;
+        for (let t = 0, u = hw + L - 1; t < H; t++, u--) { const c = h[t], a = hw + t; al += c * (hl[a] + hl[u]); ar += c * (hr[a] + hr[u]); }
+        const yl = al - d.xl + d.R * d.yl; d.xl = al; d.yl = yl;
+        const yr = ar - d.xr + d.R * d.yr; d.xr = ar; d.yr = yr;
+        const sl = yl * vol, sr = yr * vol;
+        this.blkL[j] = sl > 1 ? 1 : sl < -1 ? -1 : sl;
+        this.blkR[j] = sr > 1 ? 1 : sr < -1 ? -1 : sr;
+      }
+      this.hw = hw;
+      if (Math.abs(d.yl) < 1e-20) d.yl = 0;
+      if (Math.abs(d.yr) < 1e-20) d.yr = 0;
+    }
+
+    // host calls with any n; work happens in fixed BLOCK chunks
+    process(outL, outR, n) {
+      let pos = this.blkPos;
+      for (let j = 0; j < n; j++) {
+        if (pos === BLOCK) { this.processBlock(); pos = 0; }
+        outL[j] = this.blkL[pos];
+        if (outR) outR[j] = this.blkR[pos];
+        pos++;
+      }
+      this.blkPos = pos;
+    }
+  }
+
+  TymbalEngine.BLOCK = BLOCK; TymbalEngine.OS = OS; TymbalEngine.VIEW_N = VIEW_N;
+  TymbalEngine.toNorm = toNorm; TymbalEngine.fromNorm = fromNorm;
+  const core = { BL_F_REST, BL_Q_REST, BL_LVL_REST, BL_VENTRAL, AP_STAGES, DISP_MAX, STEM_RATIOS, CARRIER_OCT, JITTER_SD, RUBATO_SD, ASYNC_RUNDOWN, FALL_ST, FALL_DB, FALL_SHARE, INTRO_POW, CLICK_PHASE, KAPPA, TRANS_CYC, TRANS_LAG, LOCK_AIM, A_REF, HEAT_BASE, OUTRIB_DB, LOCK_GATE, BODY_GAIN, AP_F_CLOSED, AP_Q_CLOSED, AP_DB_CLOSED };
+  if (typeof module !== 'undefined' && module.exports) module.exports = { TymbalEngine, PARAMS, core };
+  else root.TymbalEngine = TymbalEngine;
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+/* AudioWorklet wrapper: tymbal engine → stereo output. Runs after tymbal-engine.js. */
+class TymbalProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.eng = new TymbalEngine(sampleRate, 1234);
+    this.vizEvery = Math.round(sampleRate / 30);
+    this.vizCount = 0;
+    this.seen = 0;                                  // clicks already sent to the page
+    this.env = [];                                  // output peak per render quantum since the last post
+    // DSP load: time spent in the engine / length of audio produced. performance.now() where the
+    // worklet has it; otherwise Date.now(), whose 1 ms steps average out over half a second
+    this.hiRes = typeof performance !== 'undefined' && typeof performance.now === 'function';
+    this.clock = this.hiRes ? () => performance.now() : () => Date.now();
+    this.busyMs = 0; this.audioMs = 0; this.load = 0; this.peak = 0; this.winPeak = 0; this.peakAge = 0;
+    this.port.onmessage = (e) => {
+      const m = e.data, eng = this.eng;
+      if (m.t === 'p') eng.setParam(m.id, m.v);
+      else if (m.t === 'many') { for (const k in m.p) eng.setParam(k, m.p[k]); }
+      else if (m.t === 'on') eng.noteOn(m.n, m.v);
+      else if (m.t === 'off') eng.noteOff(m.n);
+      else if (m.t === 'bend') eng.setBend(m.v);
+      else if (m.t === 'at') eng.setAftertouch(m.v);
+      else if (m.t === 'tempo') eng.setTempo(m.v);
+      else if (m.t === 'panic') eng.allNotesOff();
+    };
+    this.port.postMessage({ t: 'ready', sr: sampleRate, latency: TymbalEngine.LATENCY });
+  }
+  process(inputs, outputs) {
+    const out = outputs[0], l = out[0], r = out[1] || null, n = l.length;
+    const t0 = this.clock();
+    this.eng.process(l, r, n);
+    const spent = this.clock() - t0, len = n / sampleRate * 1000;
+    this.busyMs += spent; this.audioMs += len;
+    if (this.hiRes && spent / len > this.winPeak) this.winPeak = spent / len;
+    if (this.audioMs >= 500) {
+      this.load = this.busyMs / this.audioMs; this.busyMs = 0; this.audioMs = 0;
+      // peak: the slowest single callback, held for 2 s
+      if (this.winPeak >= this.peak || ++this.peakAge >= 4) { this.peak = this.winPeak; this.peakAge = 0; }
+      this.winPeak = 0;
+    }
+    let pk = 0; for (let i = 0; i < n; i++) { const a = Math.abs(l[i]); if (a > pk) pk = a; if (r) { const b = Math.abs(r[i]); if (b > pk) pk = b; } }
+    this.env.push(pk);
+    this.vizCount += n;
+    if (this.vizCount >= this.vizEvery) {
+      this.vizCount = 0;
+      const e = this.eng, N = TymbalEngine.VIEW_N;
+      // the clicks since the last post (at most the ring's length): time (s), side, kind
+      const from = Math.max(this.seen, e.vN - N), clicks = [];
+      for (let k = from; k < e.vN; k++) { const i = k & (N - 1); clicks.push(e.vT[i] / e.srOS, e.vS[i], e.vK[i]); }
+      this.seen = e.vN;
+      const info = e.info;
+      this.port.postMessage({ t: 'stat', now: e.osTimeBase / e.srOS, voices: info.voices, idle: !!info.idle, load: this.load, peak: this.hiRes ? this.peak : -1,
+        carrier: info.carrier, pulses: info.pulses, lock: info.lock, keeper: info.keeper, time: info.time, effort: info.effort, clicks, env: this.env, envDt: n / sampleRate });
+      this.env = [];
+    }
+    return true;
+  }
+}
+registerProcessor('tymbal-processor', TymbalProcessor);
+
+</script>
+<script>
+// Test presets: bench and tests only, not the plugin build.
+// phrase: [note, start s, length s]. Carrier mode: middle C (60) plays C8 = 4186 Hz; Transpose and
+// Detune place each species' carrier. switchAt changes one parameter partway through a render.
+'use strict';
+const st = (f) => 12 * Math.log2(f / 4186.01);           // semitones from C8 to f
+function place(f) { const s = st(f), t = Math.round(s); return { transpose: t, detune: Math.round((s - t) * 100) }; }
+// below 262 Hz Transpose runs out (−48 st): place the carrier with the note instead
+function low(f) { const s = 12 * Math.log2(f / 261.626), t = Math.round(s); return { params: { transpose: -48, detune: Math.round((s - t) * 100) }, note: 60 + t }; }
+const MOTH = { time: 8, body: 2, stiffness: 1, outratio: 1, outclicks: 1, outspeed: 1, hold: 0.5, attack: 0.001, sustain: 1 };
+const S_TIT = low(234), S_TIT_M = low(255), TETT = low(400);
+
+// Cyclochila australasiae, Bennet-Clark 1997 Table 2: rib 2 on the carrier (4.19 kHz)
+const CYC_RIBS = { ribs: 4, first: 0.73, tilt: -4.83, firstlevel: -0.09, taper: -8.27, outratio: 1.561, outlevel: -9.45 };
+const CASSINI = Object.assign(place(6000), { rate: 90, ribs: 12, recruit: 9, spacing: 1.02, hold: 0.92, tymbalq: 4, bodyq: 3, tilt: -1, taper: -3, outratio: 1.4, stiffness: 0.9, attack: 0.02, sustain: 1 });
+const SEPTENDECIM = Object.assign(place(1300), { rate: 68, ribs: 12, recruit: 4, spacing: 0.77, tymbalq: 12, tilt: -1, taper: -2, stiffness: 0.1, outlevel: -16, membrane: 1, cavity: 0.1, attack: 0.15, sustain: 1 });
+
+const PRESETS = [
+  {
+    name: '01 Cyclochila, slow pull (Table 2)',
+    note: 'Bennet-Clark 1997, the unloaded tymbal of an abdomenless cicada: Open body, one tymbal, ribs 4 ms apart so each click stands alone; OUT 125 ms later.',
+    params: Object.assign({}, CYC_RIBS, { rate: 4, spacing: 4, recruit: 4, hold: 0.5, tymbalq: 10, body: 2, pair: 1, stiffness: 1, attack: 0.001, sustain: 1 }),
+    phrase: [[60, 0, 1.0]],
+  },
+  {
+    name: '02 Cyclochila, calling song',
+    note: 'Both tymbals alternating at 117 Hz (234 pulses/s), 3 ribs 0.6 ms apart, tymbal Q 9.3 into the air sac; ribs 2–3 lock onto the ringing.',
+    params: Object.assign({}, CYC_RIBS, { rate: 117, spacing: 0.6, recruit: 3, tymbalq: 9.3, bodyq: 6, stiffness: 0.3, attack: 0.03 }),
+    phrase: [[60, 0, 1.5]],
+  },
+  {
+    name: '03 Cyclochila, protest',
+    note: 'All four ribs, slower and irregular, OUT clicks of the ribs too, opercula half shut.',
+    params: Object.assign({}, CYC_RIBS, { rate: 45, spacing: 0.7, recruit: 4, tymbalq: 9.3, bodyq: 6, stiffness: 0.6, scatter: 0.3, outclicks: 0.5, aperture: 0.5, attack: 0.01 }),
+    phrase: [[60, 0, 1.2]],
+  },
+  {
+    name: '04 Magicicada cassini, calling song',
+    note: 'Young & Josephson 1983: phrases of isolated ticks at 15–30 pulses/s that break into a buzz at 170–200 (both muscles alternating at 90 Hz), about 9 sub-pulses per stroke, a stiff tymbal, broad tuning around 6 kHz. Phrase 2.5 s with a 1 s rest (estimates).',
+    params: Object.assign({}, CASSINI, { song: 2, phrase: 2.5, rest: 1, intro: 0.4, start: 0.11, rubato: 0.2 }),
+    phrase: [[60, 0, 7.0]],
+  },
+  {
+    name: '05 Magicicada septendecim, calling song',
+    note: 'A slack tymbal and thick eardrums (Membrane 1: body Q about 24): every rib and stroke locks, an unbroken 1.3 kHz tone modulated at 136 Hz, in phrases of 2–3 s about 1 s apart, each ending with a drop in level and pitch (Young & Josephson 1983; Fall 0.6 is an estimate).',
+    params: Object.assign({}, SEPTENDECIM, { song: 2, phrase: 2.5, rest: 1, fall: 0.6, rubato: 0.15 }),
+    phrase: [[60, 0, 9.5]],
+  },
+  {
+    name: '06 Cystosoma, bimodal pulses',
+    note: 'Bennet-Clark & Young 1998, Figs 4 and 12: the second tymbal a quarter cycle (6 ms) late; each tymbal\'s rib 1 is higher than the song, its ribs 2–3 at 850 Hz two cycles later. The trailing rib 1 lands out of tune on the ringing abdomen (the dip), its ribs 2–3 lock and build the second hump. Bladder body: both sides of the abdomen left and right, the belly in the centre.',
+    params: Object.assign(place(850), { body: 1, spread: 0.6, rate: 40, lrphase: 0.25, ribs: 4, recruit: 3, first: 5, lead: 1.7, spacing: 0.9, tilt: -4, taper: -6, tymbalq: 15, bodyq: 9, stiffness: 0.4, outratio: 2, outlevel: -12, hold: 0.7, attack: 0.02, rubato: 0.1 }),
+    phrase: [[60, 0, 1.5]],
+  },
+  {
+    name: '07 Heat: cassini from 20 to 35 °C',
+    note: 'Sub-pulses speed from about 650 to 1200 Hz, the muscle with them; the 6 kHz carrier stays put.',
+    params: Object.assign({}, CASSINI, { heat: 20 }),
+    phrase: [[60, 0, 2.0]],
+    switchAt: { time: 1.0, id: 'heat', value: 35 },
+  },
+  {
+    name: '08 Bertholdia trigona, ×8',
+    note: 'The tiger moth that jams bat sonar (Corcoran et al. 2009, 2010): 21.5 clicks over a 12.2 ms active half-cycle, a pause, the passive half-cycle, 29.5 ms per cycle; dominant 48.7 kHz, −15 dB from 21.9 to 83.1 kHz. Natural timing with Time ×8: a 236 ms cycle, about 6 kHz. Spread of rib pitches fitted to the band; one tymbal.',
+    params: Object.assign(place(7600), MOTH, { rate: 1000 / 29.5, pair: 1, ribs: 22, recruit: 22, spacing: 0.57, first: 5, tilt: -9.5, taper: -3, tymbalq: 9, outlevel: -6 }),
+    phrase: [[60, 0, 2.5]],
+  },
+  {
+    name: '09 Cyclochila closing its opercula',
+    note: 'Calling song; after 1 s the lids over the eardrums close. The air sac\'s own resonance drops to 0.82× (Bennet-Clark & Young 1992, Table 2), but the tymbal keeps driving at 4.2 kHz: the song gets about 10 dB quieter rather than lower.',
+    params: Object.assign({}, CYC_RIBS, { rate: 117, spacing: 0.6, recruit: 3, tymbalq: 9.3, bodyq: 6, stiffness: 0.3, attack: 0.03 }),
+    phrase: [[60, 0, 2.0]],
+    switchAt: { time: 1.0, id: 'aperture', value: 0 },
+  },
+  {
+    name: '10 septendecim, then stiff',
+    note: 'The same animal; after 1.25 s its tymbal turns stiff: the lock lets go and the tone breaks into pulses.',
+    params: SEPTENDECIM,
+    phrase: [[60, 0, 2.5]],
+    switchAt: { time: 1.25, id: 'stiffness', value: 1 },
+  },
+  {
+    name: '11 Cicada orni',
+    note: 'Echemes of 84–116 ms with gaps of 84–93 ms, about 5 per second, carrier 4.2–4.8 kHz (Bulgarian and Iberian recordings, via the brief). Muscle rate and rib timing are estimates.',
+    params: Object.assign(place(4400), { song: 1, echeme: 0.105, gap: 0.08, rate: 100, ribs: 4, recruit: 3, spacing: 0.6, tilt: -3, taper: -5, tymbalq: 8, bodyq: 5, stiffness: 0.5, jitter: 0.2, rubato: 0.1, attack: 0.005 }),
+    phrase: [[60, 0, 4.0]],
+  },
+  {
+    name: '12 Lyristes plebejus (estimate)',
+    note: 'About 5.8 echemes per second at 6.1 kHz (via the brief); echeme and gap lengths, muscle and ribs are estimates for listening.',
+    params: Object.assign(place(6130), { song: 1, echeme: 0.12, gap: 0.052, rate: 150, ribs: 6, recruit: 4, spacing: 0.4, tilt: -2, taper: -4, tymbalq: 7, bodyq: 5, stiffness: 0.5, jitter: 0.1, rubato: 0.1, attack: 0.005 }),
+    phrase: [[60, 0, 4.0]],
+  },
+  {
+    name: '13 Platypleura capitata, Async (estimate)',
+    note: 'Josephson & Young 1981: asynchronous tymbal muscles, 389 pulses/s, a burst of pulses for each nerve impulse; in protest song both muscles fire together. Carrier, burst length and ribs are estimates.',
+    params: Object.assign(place(5000), { drive: 1, burst: 6, rate: 195, lrphase: 0.5, ribs: 4, recruit: 2, spacing: 0.35, tymbalq: 7, bodyq: 5, stiffness: 0.6, jitter: 0.1, attack: 0.01 }),
+    phrase: [[60, 0, 1.5]],
+    switchAt: { time: 0.75, id: 'lrphase', value: 0 },
+  },
+  {
+    name: '14 Rate mode melody',
+    note: 'The note sets the pulse rate (two tymbals alternating, each at half the note); the body stays at 4.3 kHz. Cyclochila\'s ribs, a little stiff so pulses stay evenly spaced.',
+    params: Object.assign({}, CYC_RIBS, { playmode: 1, carrier: 4300, spacing: 0.6, recruit: 3, tymbalq: 9.3, bodyq: 6, stiffness: 0.8, asym: 0, glide: 0.04, attack: 0.02, release: 0.08 }),
+    phrase: [[48, 0, 0.45], [55, 0.5, 0.45], [60, 1.0, 0.45], [64, 1.5, 0.45], [67, 2.0, 0.9], [60, 3.0, 0.9]],
+  },
+  {
+    name: '15 Ticks',
+    note: 'Echemes shorter than a muscle cycle: one stroke each, 5 per second (the ticks of M. cassini\'s phrase start, on their own).',
+    params: Object.assign({}, CASSINI, { song: 1, echeme: 0.005, gap: 0.2, jitter: 0.3, rubato: 0.2 }),
+    phrase: [[60, 0, 2.5]],
+  },
+  {
+    name: '16 Cycnia tenera, ×8',
+    note: 'Dogbane tiger moth (Corcoran et al. 2010; Fullard): 7.5 clicks per 6.5 ms half-cycle, 22.7 ms cycle, 63.5 kHz, in bursts of 1–20 cycles. Time ×8: 182 ms cycles at about 7.9 kHz. Burst lengths and gaps are estimates.',
+    params: Object.assign(place(63500 / 8), MOTH, { rate: 1000 / 22.7, pair: 1, ribs: 8, recruit: 8, spacing: 0.87, first: 3, tilt: -7, taper: -2, tymbalq: 7, outlevel: -4, song: 1, echeme: 0.12, gap: 0.15, jitter: 0.2 }),
+    phrase: [[60, 0, 4.0]],
+  },
+  {
+    name: '17 Achroia grisella, ×8',
+    note: 'Lesser wax moth, a pyraloid (Jang & Greenfield 1996; Snedden 1994): 100–150 µs pulses at 70–130 kHz in pairs, 80–100 pairs per second. Time ×8: about 11 pairs per second at 12.5 kHz. The gap inside a pair is an estimate.',
+    params: Object.assign(place(100000 / 8), MOTH, { rate: 90, ribs: 1, recruit: 1, lrphase: 0.06, tymbalq: 8, outlevel: -14, outclicks: 0, jitter: 0.05 }),
+    phrase: [[60, 0, 3.0]],
+  },
+  {
+    name: '18 Scaphoideus titanus, female',
+    note: 'Grapevine leafhopper (Mazzoni et al. 2009): vibrational pulses through the stem, about 23 per second at about 234 Hz, energy below 900 Hz. Plant body; pulse shape and stem are estimates.',
+    params: Object.assign(S_TIT.params, { body: 3, rate: 23, pair: 1, ribs: 1, recruit: 1, tymbalq: 3, outlevel: -12, stem: 250, bodyq: 6, distance: 0.4, stiffness: 1, jitter: 0.08, attack: 0.002, sustain: 1 }),
+    phrase: [[S_TIT.note, 0, 2.5]],
+  },
+  {
+    name: '19 Scaphoideus titanus, male courtship',
+    note: 'Pulse trains at about 82 per second at 255 Hz (Mazzoni et al. 2009); the four-part phrase is simplified to trains with pauses (estimates).',
+    params: Object.assign(S_TIT_M.params, { body: 3, rate: 41, ribs: 2, recruit: 2, spacing: 3, tymbalq: 4, outlevel: -10, stem: 250, bodyq: 6, distance: 0.5, stiffness: 0.8, song: 1, echeme: 0.6, gap: 0.35, jitter: 0.08, rubato: 0.1, attack: 0.01 }),
+    phrase: [[S_TIT_M.note, 0, 4.0]],
+  },
+  {
+    name: '20 Planthopper snapping organ',
+    note: 'Davranoglou et al. 2019: one cycle every 0.3–1 s, two elastic recoils per cycle, broadband 50–5000 Hz through the plant (Virant-Doberlet et al. 2023). Carrier, stem and the gap between recoils are estimates.',
+    params: Object.assign(place(800), { body: 3, rate: 1.6, pair: 1, ribs: 1, recruit: 1, tymbalq: 2, outratio: 1.3, outlevel: -2, hold: 0.12, stem: 180, bodyq: 5, distance: 0.6, stiffness: 1, jitter: 0.15, attack: 0.001, sustain: 1 }),
+    phrase: [[60, 0, 4.0]],
+  },
+  {
+    name: '21 Tettigarcta (estimate)',
+    note: 'The hairy cicada: primitive tymbals, no resonant air sac, faint signals carried by the substrate (Claridge, Morgan & Moulds 1999). No measured numbers: carrier, rate and ribs are guesses for listening.',
+    params: Object.assign(TETT.params, { body: 3, rate: 30, ribs: 3, recruit: 3, spacing: 1.5, tilt: -3, tymbalq: 4, outlevel: -8, stem: 300, bodyq: 5, distance: 0.3, stiffness: 0.8, song: 1, echeme: 0.8, gap: 0.6, jitter: 0.1, attack: 0.01 }),
+    phrase: [[TETT.note, 0, 4.0]],
+  },
+  {
+    name: '22 Hopper purr, Rate mode',
+    note: 'Small hoppers\' pure-tone vibrational signals follow muscle rate, rising with temperature (Tishechkin 2013): here the note sets the pulse rate, through a 200 Hz stem. For playing.',
+    params: { playmode: 1, body: 3, carrier: 600, ribs: 2, recruit: 2, spacing: 0.8, tymbalq: 4, outlevel: -10, stem: 200, bodyq: 6, distance: 0.3, stiffness: 0.8, asym: 0, glide: 0.05, attack: 0.02, release: 0.1 },
+    phrase: [[36, 0, 0.7], [43, 0.75, 0.7], [48, 1.5, 0.7], [41, 2.25, 1.2]],
+  },
+  {
+    name: '23 Link: Bertholdia played down an octave',
+    note: 'Link 1 makes Time follow the note like tape: an octave lower, every time doubles.',
+    params: Object.assign(place(7600), MOTH, { rate: 1000 / 29.5, pair: 1, ribs: 22, recruit: 22, spacing: 0.57, first: 5, tilt: -9.5, taper: -3, tymbalq: 9, outlevel: -6, link: 1 }),
+    phrase: [[60, 0, 1.2], [48, 1.3, 2.4]],
+  },
+  {
+    name: '24 Cystosoma extending its abdomen',
+    note: 'Bennet-Clark & Young 1998: from rest (32–34 mm) to singing length (39–42 mm) the abdomen doubles its sound, its Q rises from 4 to 9 and its pitch from 815 to 900 Hz. Here it starts at rest and stretches out over 1.5 s.',
+    params: Object.assign(place(850), { body: 1, spread: 0.6, extend: 0, rate: 40, lrphase: 0.25, ribs: 4, recruit: 3, first: 5, lead: 1.7, spacing: 0.9, tilt: -4, taper: -6, tymbalq: 15, bodyq: 9, stiffness: 0.4, outratio: 2, outlevel: -12, hold: 0.7, attack: 0.02 }),
+    phrase: [[60, 0, 3.0]],
+    sweep: { id: 'extend', from: 0, to: 1, start: 0.5, end: 2.0 },
+  },
+  {
+    name: '25 Cystosoma, panels split',
+    note: 'The three radiating panels share one air sac but are loosely coupled: loaded unevenly they ring at their own pitches (Bennet-Clark & Young 1998). Split 0.7 detunes the sides, Spread 1 puts them wide.',
+    params: Object.assign(place(850), { body: 1, spread: 1, split: 0.7, rate: 40, lrphase: 0.25, ribs: 4, recruit: 3, first: 5, lead: 1.7, spacing: 0.9, tilt: -4, taper: -6, tymbalq: 15, bodyq: 14, stiffness: 0.4, outratio: 2, outlevel: -12, hold: 0.7, attack: 0.02 }),
+    phrase: [[60, 0, 2.0]],
+  },
+];
+
+if (typeof module !== 'undefined' && module.exports) module.exports = { PRESETS };
+else (typeof globalThis !== 'undefined' ? globalThis : this).TYMBAL_PRESETS = PRESETS;
+
+</script>
+<script>
+window.TYMBAL_PARAMS = [{"id":"playmode","def":0,"min":0,"max":1,"step":1},{"id":"carrier","def":4300,"min":50,"max":16000,"log":true},{"id":"transpose","def":0,"min":-48,"max":48,"step":1},{"id":"detune","def":0,"min":-100,"max":100},{"id":"bendrange","def":12,"min":2,"max":48,"step":1},{"id":"glide","def":0.02,"min":0,"max":2,"curve":3},{"id":"mode","def":0,"min":0,"max":1,"step":1},{"id":"rate","def":117,"min":1,"max":600,"log":true},{"id":"drive","def":0,"min":0,"max":1,"step":1},{"id":"burst","def":4,"min":1,"max":16,"step":1},{"id":"lrphase","def":0.5,"min":0,"max":0.5},{"id":"pair","def":0,"min":0,"max":2,"step":1},{"id":"asym","def":0.1,"min":0,"max":1},{"id":"hold","def":0.5,"min":0.05,"max":0.95},{"id":"heat","def":30,"min":20,"max":40},{"id":"ribs","def":4,"min":1,"max":24,"step":1},{"id":"recruit","def":3,"min":1,"max":24,"step":1},{"id":"spacing","def":0.6,"min":0.05,"max":10,"log":true},{"id":"lead","def":0,"min":0,"max":10,"curve":2},{"id":"first","def":0,"min":-12,"max":12},{"id":"tilt","def":-5,"min":-36,"max":12},{"id":"firstlevel","def":0,"min":-12,"max":6},{"id":"taper","def":-4,"min":-24,"max":6},{"id":"tymbalq","def":9,"min":2,"max":40,"log":true},{"id":"tune","def":0,"min":-12,"max":12},{"id":"stiffness","def":0.6,"min":0,"max":1},{"id":"scatter","def":0.03,"min":0,"max":1},{"id":"outratio","def":1.5,"min":1,"max":3},{"id":"outlevel","def":-10,"min":-40,"max":0},{"id":"outclicks","def":0,"min":0,"max":1},{"id":"outspeed","def":0.3,"min":0.05,"max":1,"log":true},{"id":"body","def":0,"min":0,"max":3,"step":1},{"id":"bodyq","def":6,"min":1,"max":40,"log":true},{"id":"aperture","def":1,"min":0,"max":1},{"id":"membrane","def":0,"min":0,"max":1},{"id":"cavity","def":0.2,"min":0,"max":1},{"id":"extend","def":1,"min":0,"max":1},{"id":"split","def":0,"min":0,"max":1},{"id":"distance","def":0.3,"min":0,"max":1},{"id":"stem","def":250,"min":20,"max":2000,"log":true},{"id":"direct","def":0.03,"min":0,"max":1},{"id":"song","def":0,"min":0,"max":2,"step":1},{"id":"echeme","def":0.1,"min":0.005,"max":5,"log":true},{"id":"gap","def":0.09,"min":0,"max":5,"curve":2},{"id":"phrase","def":3,"min":0.2,"max":30,"log":true},{"id":"rest","def":1,"min":0,"max":10,"curve":2},{"id":"start","def":1,"min":0.05,"max":1},{"id":"intro","def":0,"min":0,"max":0.9},{"id":"fall","def":0,"min":0,"max":1},{"id":"jitter","def":0.03,"min":0,"max":1},{"id":"rubato","def":0,"min":0,"max":1},{"id":"sync","def":0,"min":0,"max":1,"step":1},{"id":"time","def":1,"min":0.1,"max":32,"log":true},{"id":"link","def":0,"min":0,"max":1},{"id":"chorus","def":0,"min":0,"max":2,"step":1},{"id":"coupling","def":0,"min":0,"max":1},{"id":"attack","def":0.01,"min":0.001,"max":5,"curve":3},{"id":"decay","def":0.3,"min":0.001,"max":5,"curve":3},{"id":"sustain","def":0.9,"min":0,"max":1},{"id":"release","def":0.05,"min":0.001,"max":8,"curve":3},{"id":"spread","def":0.3,"min":0,"max":1},{"id":"volume","def":-6,"min":-48,"max":6}];
+</script>
+<script>
+(function () {
+  'use strict';
+  /* ---------- control specs: ranges and defaults from the engine's table ---------- */
+  const PT = {}; for (const p of window.TYMBAL_PARAMS) PT[p.id] = p;
+  const pct = v => Math.round(v * 100) + '%';
+  const secs = v => v < 1 ? (v < 0.01 ? (v * 1000).toFixed(1) : Math.round(v * 1000)) + ' ms' : v.toFixed(2) + ' s';
+  const sgn = v => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v);
+  const hz = f => f >= 1000 ? (f / 1000).toFixed(f >= 10000 ? 1 : 2) + ' kHz' : Math.round(f) + ' Hz';
+  const st = v => sgn(+v.toFixed(Math.abs(v - Math.round(v)) < 0.005 ? 0 : 1)) + ' st';
+  const db = v => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(1) + ' dB';
+  const ms = v => (v < 1 ? v.toFixed(2) : v.toFixed(1)) + ' ms';
+  const times = v => '×' + (v < 1 ? v.toFixed(2) : v < 10 ? v.toFixed(1) : Math.round(v));
+  const int = v => String(Math.round(v));
+  // [group, id, name, format, extras]; type comes from the table (step 1 with a short option list → switch)
+  const OPTS = { playmode: ['Carrier', 'Rate'], mode: ['Mono', 'Poly'], drive: ['Sync', 'Async'], pair: ['Both', 'Left', 'Right'],
+    body: ['Helmholtz', 'Bladder', 'Open', 'Plant'], song: ['Continuous', 'Echeme', 'Phrase'], sync: ['Off', 'On'] };
+  const LAYOUT = [
+    ['g-play', 'playmode', 'Play mode'], ['g-play', 'carrier', 'Carrier', hz, { big: true }], ['g-play', 'transpose', 'Transpose', v => sgn(Math.round(v)) + ' st', { bipolarAt: 0 }],
+    ['g-play', 'detune', 'Detune', v => sgn(Math.round(v)) + ' ct', { bipolarAt: 0.5 }], ['g-play', 'glide', 'Glide', v => v < 0.0015 ? 'Off' : secs(v)],
+    ['g-play', 'bendrange', 'Bend range', v => '±' + Math.round(v) + ' st'], ['g-play', 'mode', 'Voices'],
+    ['g-muscle', 'rate', 'Rate', v => (v < 10 ? v.toFixed(1) : Math.round(v)) + ' Hz', { big: true, long: 'Muscle cycles per second per tymbal' }], ['g-muscle', 'drive', 'Drive'],
+    ['g-muscle', 'burst', 'Burst', int], ['g-muscle', 'pair', 'Tymbals'], ['g-muscle', 'lrphase', 'L–R phase', v => v.toFixed(2) + ' cycle'],
+    ['g-muscle', 'asym', 'Asymmetry', pct], ['g-muscle', 'hold', 'Hold', pct], ['g-muscle', 'heat', 'Heat', v => v.toFixed(1) + ' °C'],
+    ['g-tymbal', 'ribs', 'Ribs', int], ['g-tymbal', 'recruit', 'Recruit', int], ['g-tymbal', 'spacing', 'Spacing', ms], ['g-tymbal', 'lead', 'Lead', ms],
+    ['g-tymbal', 'first', 'First', st, { bipolarAt: 0.5 }], ['g-tymbal', 'tilt', 'Tilt', st, { bipolarAt: 0 }], ['g-tymbal', 'firstlevel', 'First level', db, { bipolarAt: 0 }],
+    ['g-tymbal', 'taper', 'Taper', db, { bipolarAt: 0 }], ['g-tymbal', 'tymbalq', 'Tymbal Q', v => v.toFixed(1)], ['g-tymbal', 'tune', 'Tune', st, { bipolarAt: 0.5 }],
+    ['g-tymbal', 'stiffness', 'Stiffness', v => v < 0.02 ? 'Slack' : v > 0.98 ? 'Stiff' : pct(v), { big: true }], ['g-tymbal', 'scatter', 'Scatter', pct],
+    ['g-tymbal', 'outratio', 'Out pitch', v => '×' + v.toFixed(2)], ['g-tymbal', 'outlevel', 'Out level', db], ['g-tymbal', 'outclicks', 'Out clicks', pct], ['g-tymbal', 'outspeed', 'Out speed', v => '×' + v.toFixed(2)],
+    ['g-body', 'body', 'Body'], ['g-body', 'bodyq', 'Body Q', v => v.toFixed(1)], ['g-body', 'aperture', 'Opercula', v => v > 0.99 ? 'Open' : v < 0.01 ? 'Shut' : pct(v)],
+    ['g-body', 'membrane', 'Eardrums', v => v < 0.01 ? 'Thin' : pct(v)], ['g-body', 'cavity', 'Cavity', pct], ['g-body', 'extend', 'Extend', pct], ['g-body', 'split', 'Split', pct],
+    ['g-body', 'distance', 'Distance', pct], ['g-body', 'stem', 'Stem', hz], ['g-body', 'direct', 'Direct', pct],
+    ['g-song', 'song', 'Song'], ['g-song', 'echeme', 'Echeme', secs], ['g-song', 'gap', 'Gap', secs], ['g-song', 'phrase', 'Phrase', secs], ['g-song', 'rest', 'Rest', secs],
+    ['g-song', 'start', 'Start', pct], ['g-song', 'intro', 'Intro', pct], ['g-song', 'fall', 'Fall', pct], ['g-song', 'jitter', 'Jitter', pct], ['g-song', 'rubato', 'Rubato', pct], ['g-song', 'sync', 'Sync'],
+    ['g-scale', 'time', 'Time', times, { big: true }], ['g-scale', 'link', 'Link', pct],
+    ['g-env', 'attack', 'Attack', secs], ['g-env', 'decay', 'Decay', secs], ['g-env', 'sustain', 'Sustain', pct], ['g-env', 'release', 'Release', secs],
+    ['g-out', 'spread', 'Spread', pct], ['g-out', 'volume', 'Volume', db],
+  ];
+  const SPECS = LAYOUT.map(([g, id, name, fmt, x]) => {
+    const p = PT[id]; if (!p) throw new Error('no parameter ' + id);
+    const s = Object.assign({ g, id, name, min: p.min, max: p.max, def: p.def, log: p.log, curve: p.curve, step: p.step, fmt }, x || {});
+    if (OPTS[id]) { s.type = 'seg'; s.opts = OPTS[id]; } else s.type = 'knob';
+    return s;
+  });
+
+  /* ---------- audio ---------- */
+  let ctx = null, node = null, analyser = null, ready = false, starting = null;
+  const state = {};
+  const queue = [];
+  function send(msg) { if (ready) node.port.postMessage(msg); else queue.push(msg); }
+  function showError(t) { const e = document.getElementById('err'); e.style.display = 'block'; e.textContent = t; }
+
+  function start() {
+    if (starting) return starting;
+    starting = (async () => {
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        ctx = new AC({ latencyHint: 'interactive' });
+        if (!ctx.audioWorklet) throw new Error('This browser has no AudioWorklet support. Try a current Chrome, Edge, Firefox or Safari.');
+        const src = document.getElementById('dsp').textContent;
+        const blobUrl = () => URL.createObjectURL(new Blob([src], { type: 'application/javascript' }));
+        const dataUrl = () => 'data:application/javascript;charset=utf-8,' + encodeURIComponent(src);
+        const tries = location.protocol === 'file:' ? [dataUrl, blobUrl] : [blobUrl, dataUrl];
+        let loaded = false, lastErr = null;
+        for (const mk of tries) { try { await ctx.audioWorklet.addModule(mk()); loaded = true; break; } catch (err) { lastErr = err; } }
+        if (!loaded) throw lastErr;
+        node = new AudioWorkletNode(ctx, 'tymbal-processor', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] });
+        analyser = ctx.createAnalyser(); analyser.fftSize = 2048; analyser.smoothingTimeConstant = 0;
+        analyser.minDecibels = -105; analyser.maxDecibels = -20;
+        node.connect(ctx.destination); node.connect(analyser);
+        node.port.onmessage = onMsg;
+        node.onprocessorerror = () => showError('The audio engine stopped with an error. Reload the page.');
+        ready = true;
+        const all = {}; for (const s of SPECS) all[s.id] = state[s.id];
+        node.port.postMessage({ t: 'many', p: all });
+        node.port.postMessage({ t: 'tempo', v: +document.getElementById('tempo').value || 120 });
+        while (queue.length) node.port.postMessage(queue.shift());
+        if (ctx.state !== 'running') await ctx.resume();
+        document.getElementById('power').classList.add('hide');
+      } catch (err) { showError('Audio could not start: ' + (err && err.message || err)); starting = null; }
+    })();
+    return starting;
+  }
+  document.getElementById('powerBtn').addEventListener('click', start);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) allOff(); });
+
+  /* ---------- knobs and switches ---------- */
+  const knobs = {}, segs = {};
+  function toNorm(s, v) {
+    if (s.log) return Math.log(v / s.min) / Math.log(s.max / s.min);
+    const n = (v - s.min) / (s.max - s.min);
+    return s.curve ? Math.pow(Math.max(0, n), 1 / s.curve) : n;
+  }
+  function fromNorm(s, n) {
+    n = Math.min(1, Math.max(0, n));
+    let v = s.log ? s.min * Math.pow(s.max / s.min, n) : s.min + (s.max - s.min) * (s.curve ? Math.pow(n, s.curve) : n);
+    if (s.step) v = Math.round(v / s.step) * s.step;
+    return v;
+  }
+  function makeKnob(s, host) {
+    const el = document.createElement('div');
+    el.className = 'knob' + (s.big ? ' big' : '');
+    el.innerHTML = '<div class="dial" tabindex="0" role="slider"><div class="cap"></div><div class="ptr"></div></div><span class="name"></span><span class="val"></span>';
+    const dial = el.firstChild, valEl = el.children[2];
+    el.children[1].textContent = s.name;
+    dial.setAttribute('aria-label', s.long || s.name);
+    host.appendChild(el);
+    const k = { s, el, dial, valEl, norm: toNorm(s, s.def) };
+    k.set = (n, quiet) => {
+      k.norm = Math.min(1, Math.max(0, n));
+      const v = fromNorm(s, k.norm);
+      if (s.step) k.norm = toNorm(s, v);
+      state[s.id] = v;
+      const nn = k.norm;
+      let a0 = 0, a1 = nn;
+      if (s.bipolarAt !== undefined) { const c = s.bipolarAt === 0 ? toNorm(s, 0) : s.bipolarAt; a0 = Math.min(nn, c); a1 = Math.max(nn, c); }
+      dial.style.setProperty('--a0', (a0 * 270) + 'deg');
+      dial.style.setProperty('--a1', (a1 * 270) + 'deg');
+      dial.querySelector('.ptr').style.transform = 'rotate(' + (-135 + nn * 270) + 'deg)';
+      const txt = s.fmt(v);
+      valEl.textContent = txt;
+      dial.setAttribute('aria-valuenow', v.toFixed(3));
+      dial.setAttribute('aria-valuetext', txt);
+      if (!quiet) send({ t: 'p', id: s.id, v });
+      updateDims();
+    };
+    let dragY = null, startN = 0;
+    dial.addEventListener('pointerdown', e => { dial.setPointerCapture(e.pointerId); dragY = e.clientY; startN = k.norm; dial.focus(); e.preventDefault(); });
+    dial.addEventListener('pointermove', e => {
+      if (dragY === null) return;
+      const d = (dragY - e.clientY) * (e.shiftKey ? 0.0008 : 0.005);
+      k.set(startN + d);
+      if (e.shiftKey) { dragY = e.clientY; startN = k.norm; }
+    });
+    const end = () => { dragY = null; };
+    dial.addEventListener('pointerup', end); dial.addEventListener('pointercancel', end);
+    dial.addEventListener('dblclick', () => k.set(toNorm(s, s.def)));
+    dial.addEventListener('wheel', e => { e.preventDefault(); k.set(k.norm - Math.sign(e.deltaY) * (e.shiftKey ? 0.005 : 0.03)); }, { passive: false });
+    dial.addEventListener('keydown', e => {
+      const stp = s.step ? 1 / ((s.max - s.min) / s.step) : (e.shiftKey ? 0.005 : 0.02);
+      let used = true;
+      if (e.key === 'ArrowUp' || e.key === 'ArrowRight') k.set(k.norm + stp);
+      else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') k.set(k.norm - stp);
+      else if (e.key === 'Home') k.set(0);
+      else if (e.key === 'End') k.set(1);
+      else used = false;
+      if (used) { e.preventDefault(); e.stopPropagation(); }
+    });
+    knobs[s.id] = k;
+    k.set(k.norm, true);
+  }
+  function makeSeg(s, host) {
+    const w = document.createElement('div'); w.className = 'segwrap';
+    w.innerHTML = '<span></span><div class="seg" role="group"></div>';
+    w.firstChild.textContent = s.name;
+    const seg = w.lastChild; seg.setAttribute('aria-label', s.name);
+    const btns = s.opts.map((o, i) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = o; b.dataset.v = i; seg.appendChild(b); return b; });
+    host.appendChild(w);
+    const g = { s, el: w };
+    g.set = (v, quiet) => {
+      v = Math.round(v); state[s.id] = v;
+      btns.forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.v === v)));
+      if (!quiet) send({ t: 'p', id: s.id, v });
+      if ((s.id === 'mode' || s.id === 'playmode') && !quiet) releaseKeys();
+      updateDims();
+    };
+    btns.forEach(b => b.addEventListener('click', () => g.set(+b.dataset.v)));
+    segs[s.id] = g;
+    g.set(s.def, true);
+  }
+  for (const s of SPECS) { const host = document.getElementById(s.g); if (s.type === 'knob') makeKnob(s, host); else makeSeg(s, host); }
+
+  function dim(id, off, why) {
+    const t = knobs[id] || segs[id]; if (!t) return;
+    t.el.classList.toggle('dim', off); t.el.title = off ? why : '';
+  }
+  function updateDims() {
+    if (Object.keys(state).length < SPECS.length) return;
+    const rate = state.playmode === 1, body = state.body, song = state.song, both = state.pair === 0;
+    dim('carrier', !rate, 'Carrier sets the body in Rate mode; in Carrier mode the note does');
+    dim('rate', rate, 'In Rate mode the note sets the pulse rate');
+    dim('link', rate, 'Link works in Carrier mode');
+    dim('glide', state.mode === 1, 'Glide works in Mono only');
+    dim('burst', state.drive !== 1, 'Burst works with Async drive');
+    dim('lrphase', !both, 'L–R phase needs both tymbals'); dim('asym', !both, 'Asymmetry needs both tymbals');
+    for (const id of ['aperture', 'membrane', 'cavity']) dim(id, body !== 0, 'Works with the Helmholtz body');
+    for (const id of ['extend', 'split']) dim(id, body !== 1, 'Works with the Bladder body');
+    for (const id of ['distance', 'stem']) dim(id, body !== 3, 'Works with the Plant body');
+    dim('bodyq', body === 2, 'The Open body has no resonance');
+    dim('direct', body >= 2, 'Open and Plant have no separate direct sound');
+    for (const id of ['echeme', 'gap']) dim(id, song !== 1, 'Works with Song: Echeme');
+    for (const id of ['phrase', 'rest', 'start', 'intro', 'fall']) dim(id, song !== 2, 'Works with Song: Phrase');
+    dim('sync', song === 0, 'Sync times echemes and phrases');
+    dim('outspeed', state.outclicks < 0.01, 'Set Out clicks above 0');
+    dim('recruit', false, '');
+  }
+  updateDims();
+
+  function setValue(id, v, quiet) {
+    if (segs[id]) segs[id].set(v, quiet);
+    else if (knobs[id]) knobs[id].set(toNorm(knobs[id].s, v), quiet);
+  }
+  function sendAll() { const all = {}; for (const s of SPECS) all[s.id] = state[s.id]; send({ t: 'many', p: all }); }
+  function resetAll() { for (const s of SPECS) setValue(s.id, s.def, true); sendAll(); }
+  document.getElementById('resetAll').addEventListener('click', () => { stopPhrase(); allOff(); resetAll(); });
+
+  /* ---------- test presets ---------- */
+  const PRESETS = window.TYMBAL_PRESETS || [];
+  const sel = document.getElementById('presetSel'), about = document.getElementById('presetAbout');
+  PRESETS.forEach((p, i) => { const o = document.createElement('option'); o.value = i; o.textContent = p.name; sel.appendChild(o); });
+  sel.addEventListener('keydown', e => e.stopPropagation());
+  const showAbout = () => { const pr = PRESETS[+sel.value]; about.textContent = pr ? pr.note : ''; };
+  sel.addEventListener('change', showAbout); showAbout();
+  let timers = [], sweepTimer = null;
+  function stopPhrase() {
+    timers.forEach(clearTimeout); timers = [];
+    if (sweepTimer) { clearInterval(sweepTimer); sweepTimer = null; }
+  }
+  function loadPreset() {
+    const pr = PRESETS[+sel.value]; if (!pr) return null;
+    stopPhrase(); allOff(); resetAll();
+    for (const k in pr.params) setValue(k, pr.params[k], true);
+    sendAll();
+    return pr;
+  }
+  document.getElementById('presetLoad').addEventListener('click', loadPreset);
+  // play the preset as the renders do: its notes at their times, a switch at its time, a sweep
+  document.getElementById('presetPlay').addEventListener('click', async () => {
+    await start();
+    const pr = loadPreset(); if (!pr) return;
+    for (const [n, t, d] of pr.phrase) {
+      timers.push(setTimeout(() => { send({ t: 'on', n, v: 100 }); sounding.set(n, 1); paintKeys(); }, t * 1000));
+      timers.push(setTimeout(() => { send({ t: 'off', n }); sounding.delete(n); paintKeys(); }, (t + d) * 1000));
+    }
+    if (pr.switchAt) timers.push(setTimeout(() => setValue(pr.switchAt.id, pr.switchAt.value), pr.switchAt.time * 1000));
+    if (pr.sweep) {
+      const t0 = performance.now(), sw = pr.sweep;
+      setValue(sw.id, sw.from);
+      sweepTimer = setInterval(() => {
+        const u = Math.min(1, Math.max(0, ((performance.now() - t0) / 1000 - sw.start) / (sw.end - sw.start)));
+        setValue(sw.id, sw.from + (sw.to - sw.from) * u);
+        if (u >= 1) { clearInterval(sweepTimer); sweepTimer = null; }
+      }, 30);
+    }
+  });
+
+  /* ---------- pitch bend, aftertouch, tempo ---------- */
+  const bendEl = document.getElementById('bend'), roBend = document.getElementById('roBend');
+  const sendBend = () => { send({ t: 'bend', v: +bendEl.value }); roBend.textContent = (+bendEl.value * (state.bendrange || 12)).toFixed(1) + ' st'; };
+  bendEl.addEventListener('input', sendBend);
+  const springBack = () => { bendEl.value = 0; sendBend(); };
+  bendEl.addEventListener('pointerup', springBack); bendEl.addEventListener('pointercancel', springBack);
+  bendEl.addEventListener('keydown', e => e.stopPropagation()); bendEl.addEventListener('keyup', e => { e.stopPropagation(); springBack(); });
+  const atEl = document.getElementById('at');
+  atEl.addEventListener('input', () => send({ t: 'at', v: +atEl.value }));
+  atEl.addEventListener('keydown', e => e.stopPropagation());
+  const tempoEl = document.getElementById('tempo');
+  tempoEl.addEventListener('change', () => send({ t: 'tempo', v: +tempoEl.value || 120 }));
+  tempoEl.addEventListener('keydown', e => e.stopPropagation());
+
+  /* ---------- PC keyboard as a MIDI keyboard (Ableton layout) ---------- */
+  const KEYMAP = { KeyA: 0, KeyW: 1, KeyS: 2, KeyE: 3, KeyD: 4, KeyF: 5, KeyT: 6, KeyG: 7, KeyY: 8, KeyH: 9, KeyU: 10, KeyJ: 11,
+                   KeyK: 12, KeyO: 13, KeyL: 14, KeyP: 15, Semicolon: 16 };
+  const KEYCAP = { KeyA: 'A', KeyW: 'W', KeyS: 'S', KeyE: 'E', KeyD: 'D', KeyF: 'F', KeyT: 'T', KeyG: 'G', KeyY: 'Y', KeyH: 'H', KeyU: 'U', KeyJ: 'J',
+                   KeyK: 'K', KeyO: 'O', KeyL: 'L', KeyP: 'P', Semicolon: ';' };
+  const VELS = [1, 20, 40, 60, 80, 100, 127];
+  let octave = 3, velIdx = 5;                 // Ableton naming: C3 = MIDI 60 (carrier C8 = 4186 Hz in Carrier mode)
+  const down = new Map(), sounding = new Map();
+  const noteName = m => ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'][((m % 12) + 12) % 12] + (Math.floor(m / 12) - 2);
+  function baseNote() { return (octave + 2) * 12; }
+  function noteOn(srcKey, midi) {
+    if (down.has(srcKey) || midi < 0 || midi > 127) return;
+    start();
+    down.set(srcKey, midi);
+    sounding.set(midi, (sounding.get(midi) || 0) + 1);
+    send({ t: 'on', n: midi, v: VELS[velIdx] });
+    paintKeys();
+  }
+  function noteOff(srcKey) {
+    if (!down.has(srcKey)) return;
+    const midi = down.get(srcKey); down.delete(srcKey);
+    const c = (sounding.get(midi) || 1) - 1;
+    if (c <= 0) { sounding.delete(midi); send({ t: 'off', n: midi }); } else sounding.set(midi, c);
+    paintKeys();
+  }
+  function releaseKeys() { down.clear(); sounding.clear(); paintKeys(); }
+  function allOff() { releaseKeys(); send({ t: 'panic' }); }
+  document.getElementById('panic').addEventListener('click', () => { stopPhrase(); allOff(); });
+  window.addEventListener('blur', allOff);
+  window.addEventListener('keydown', e => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.target && (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT')) return;
+    if (e.code in KEYMAP) { e.preventDefault(); if (!e.repeat) noteOn(e.code, baseNote() + KEYMAP[e.code]); return; }
+    if (e.repeat) return;
+    if (e.code === 'KeyZ') octave = Math.max(-2, octave - 1);
+    else if (e.code === 'KeyX') octave = Math.min(8, octave + 1);
+    else if (e.code === 'KeyC') velIdx = Math.max(0, velIdx - 1);
+    else if (e.code === 'KeyV') velIdx = Math.min(VELS.length - 1, velIdx + 1);
+    else return;
+    e.preventDefault();
+    updateKeyLabels();
+  });
+  window.addEventListener('keyup', e => { if (e.code in KEYMAP) noteOff(e.code); });
+
+  const keysEl = document.getElementById('keys'), keyEls = [];
+  const whiteSemis = [0, 2, 4, 5, 7, 9, 11, 12, 14, 16];
+  const isBlack = s => [1, 3, 6, 8, 10, 13, 15].includes(s);
+  Object.keys(KEYMAP).forEach(code => {
+    const semi = KEYMAP[code], el = document.createElement('div');
+    el.className = 'key ' + (isBlack(semi) ? 'b' : 'w');
+    el.dataset.semi = semi;
+    el.innerHTML = '<span class="c"></span>' + KEYCAP[code];
+    if (isBlack(semi)) { const left = whiteSemis.filter(w => w < semi).length; el.style.left = 'calc(' + (left * 10) + '% - 3.2%)'; el.style.width = '6.4%'; }
+    else { el.style.left = (whiteSemis.indexOf(semi) * 10) + '%'; el.style.width = '10%'; }
+    const pid = 'ptr' + semi;
+    el.addEventListener('pointerdown', e => { el.setPointerCapture(e.pointerId); noteOn(pid, baseNote() + semi); e.preventDefault(); });
+    const up = () => noteOff(pid);
+    el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up); el.addEventListener('lostpointercapture', up);
+    keysEl.appendChild(el); keyEls.push(el);
+  });
+  function paintKeys() { const b = baseNote(); for (const el of keyEls) el.classList.toggle('on', sounding.has(b + +el.dataset.semi)); }
+  function updateKeyLabels() {
+    const b = baseNote();
+    for (const el of keyEls) { const s = +el.dataset.semi; el.firstChild.textContent = (s % 12 === 0) ? noteName(b + s) : ''; }
+    document.getElementById('roOct').textContent = noteName(b);
+    document.getElementById('roVel').textContent = VELS[velIdx];
+    paintKeys();
+  }
+  updateKeyLabels();
+
+  /* ---------- live view: readouts, the tymbal strip, the spectrogram ---------- */
+  const roCar = document.getElementById('roCar'), roPul = document.getElementById('roPul'), roLock = document.getElementById('roLock');
+  const roKeep = document.getElementById('roKeep'), roTime = document.getElementById('roTime'), roVo = document.getElementById('roVo'), roCpu = document.getElementById('roCpu');
+  const noteOf = f => { const m = 69 + 12 * Math.log2(f / 440), r = Math.round(m), c = Math.round((m - r) * 100); return ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'][((r % 12) + 12) % 12] + (Math.floor(r / 12) - 1) + (c ? ' ' + (c > 0 ? '+' : '−') + Math.abs(c) : ''); };
+  const clicks = [];          // [engine time s, side, kind]
+  const envs = [];            // [engine time s, peak]
+  let engNow = 0, engAt = 0;  // engine time at the last post, and when it arrived (performance.now)
+  function onMsg(e) {
+    const m = e.data;
+    if (m.t !== 'stat') return;
+    for (let i = 0; i < m.clicks.length; i += 3) clicks.push([m.clicks[i], m.clicks[i + 1], m.clicks[i + 2]]);
+    for (let i = 0; i < m.env.length; i++) envs.push([m.now - (m.env.length - 1 - i) * m.envDt, m.env[i]]);
+    engNow = m.now; engAt = performance.now();
+    while (clicks.length && clicks[0][0] < engNow - 1.2) clicks.shift();
+    while (envs.length && envs[0][0] < engNow - 1.2) envs.shift();
+    const on = m.voices > 0;
+    roCar.textContent = on ? hz(m.carrier) + ' · ' + noteOf(m.carrier) : '—';
+    roPul.textContent = on && m.pulses > 0 ? (m.pulses < 10 ? m.pulses.toFixed(1) : Math.round(m.pulses)) + ' /s' : '—';
+    roLock.textContent = on ? Math.round(m.lock * 100) + '%' : '—';
+    roKeep.textContent = on && m.lock >= 0.5 && state.body <= 1 ? (m.keeper >= 0 ? '+' : '−') + Math.abs(m.keeper).toFixed(1) + ' ct' : '—';
+    roTime.textContent = on ? times(m.time) : times(state.time || 1);
+    roVo.textContent = m.voices + (state.mode === 1 ? '/8' : '');
+    const pc = v => (v * 100).toFixed(v < 0.1 ? 1 : 0) + '%';
+    roCpu.textContent = m.idle ? pc(m.load) + ' · IDLE' : pc(m.load) + (m.peak >= 0 ? ' · PEAK ' + pc(m.peak) : '');
+    roCpu.className = m.load > 0.5 || m.peak > 0.8 ? 'warn' : '';
+  }
+
+  let win = 0.25;
+  const winBtns = document.querySelectorAll('#winSeg button');
+  winBtns.forEach(b => b.addEventListener('click', () => { win = +b.dataset.w; winBtns.forEach(x => x.setAttribute('aria-pressed', String(x === b))); }));
+  const ribsC = document.getElementById('ribs'), rx = ribsC.getContext('2d');
+  function drawRibs() {
+    const r = ribsC.getBoundingClientRect(), d = window.devicePixelRatio || 1;
+    const W = Math.round(r.width * d), H = Math.round(r.height * d);
+    if (ribsC.width !== W || ribsC.height !== H) { ribsC.width = W; ribsC.height = H; }
+    rx.fillStyle = '#060608'; rx.fillRect(0, 0, W, H);
+    // the engine runs ahead in blocks; follow it smoothly between posts
+    const now = engNow + (ready && ctx && ctx.state === 'running' ? Math.min(0.05, (performance.now() - engAt) / 1000) : 0);
+    const t0 = now - win, X = t => (t - t0) / win * W;
+    const lanes = [[H * 0.36, 'L'], [H * 0.6, 'R']], half = H * 0.09;
+    rx.font = (9 * d) + 'px Monaco, monospace'; rx.textAlign = 'left';
+    for (const [y, lab] of lanes) {
+      rx.fillStyle = 'rgba(255,197,138,.12)'; rx.fillRect(0, Math.round(y), W, 1);
+    }
+    const w = Math.max(1, Math.round(d * (win <= 0.05 ? 2 : 1)));
+    for (const [t, side, kind] of clicks) {
+      if (t < t0 || t > now) continue;
+      const x = Math.round(X(t)), y = lanes[side][0];
+      if (kind === 3) { rx.fillStyle = '#7a4a22'; rx.fillRect(x, y, w, half * 0.7); }
+      else { rx.fillStyle = kind === 1 ? '#f08a24' : '#8a8a92'; rx.fillRect(x, y - half, w, half * 2); }
+    }
+    for (const [y, lab] of lanes) {
+      rx.fillStyle = '#060608'; rx.fillRect(0, y - 6 * d, 12 * d, 12 * d);
+      rx.fillStyle = 'rgba(255,197,138,.75)'; rx.fillText(lab, 3 * d, y + 3 * d);
+    }
+    // output envelope (peak per render quantum), on a dB scale from −60
+    const yb = H * 0.95, ht = H * 0.22;
+    rx.strokeStyle = '#ffc58a'; rx.lineWidth = 1 * d; rx.beginPath();
+    let first = true;
+    for (const [t, p] of envs) {
+      if (t < t0 || t > now) continue;
+      const dbv = 20 * Math.log10(Math.max(1e-6, p)), u = Math.max(0, Math.min(1, (dbv + 60) / 60));
+      const x = X(t), y = yb - u * ht;
+      if (first) { rx.moveTo(x, y); first = false; } else rx.lineTo(x, y);
+    }
+    rx.stroke();
+    rx.fillStyle = 'rgba(255,197,138,.45)'; rx.textAlign = 'right';
+    rx.fillText((win < 1 ? Math.round(win * 1000) + ' ms' : win + ' s'), W - 4 * d, H - 4 * d);
+  }
+
+  const spec = document.getElementById('spec'), axis = document.getElementById('axis');
+  const sx = spec.getContext('2d'), ax = axis.getContext('2d');
+  let fbuf = null, col = null;
+  // colour map: black → deep orange → bytebent orange → white
+  const STOPS = [[0, 6, 6, 8], [0.35, 70, 30, 6], [0.7, 240, 138, 36], [1, 255, 244, 230]];
+  const LUT = new Uint8ClampedArray(256 * 3);
+  for (let i = 0; i < 256; i++) {
+    const t = i / 255; let a = STOPS[0], b = STOPS[STOPS.length - 1];
+    for (let s = 0; s < STOPS.length - 1; s++) if (t >= STOPS[s][0] && t <= STOPS[s + 1][0]) { a = STOPS[s]; b = STOPS[s + 1]; break; }
+    const u = (t - a[0]) / Math.max(1e-6, b[0] - a[0]);
+    for (let c = 0; c < 3; c++) LUT[i * 3 + c] = a[c + 1] + (b[c + 1] - a[c + 1]) * u;
+  }
+  function fitCanvases() {
+    const r = spec.getBoundingClientRect(), d = window.devicePixelRatio || 1;
+    const w = Math.round(r.width * d), h = Math.round(r.height * d);
+    if (spec.width !== w || spec.height !== h) {
+      spec.width = w; spec.height = h; axis.width = w; axis.height = h;
+      sx.fillStyle = '#060608'; sx.fillRect(0, 0, w, h);
+      col = sx.createImageData(1, h);
+      ax.clearRect(0, 0, w, h);
+      ax.font = (9 * d) + 'px Monaco, monospace'; ax.textAlign = 'right';
+      for (const f of [5000, 10000, 15000, 20000]) {
+        const y = h - f / 20000 * (h - 2) - 1;
+        ax.fillStyle = 'rgba(255,197,138,.18)'; ax.fillRect(0, Math.round(y), w, 1);
+        ax.fillStyle = 'rgba(255,197,138,.7)'; ax.fillText((f / 1000) + 'k', w - 4 * d, Math.max(10 * d, y - 3 * d));
+      }
+    }
+    return d;
+  }
+  function drawSpec(stepPx) {
+    const d = fitCanvases(), W = spec.width, H = spec.height;
+    const step = Math.max(1, Math.round(stepPx * d));
+    sx.drawImage(spec, -step, 0);
+    if (!analyser) { sx.fillStyle = '#060608'; sx.fillRect(W - step, 0, step, H); return; }
+    if (!fbuf) fbuf = new Float32Array(analyser.frequencyBinCount);
+    analyser.getFloatFrequencyData(fbuf);
+    const binHz = ctx.sampleRate / analyser.fftSize, lo = analyser.minDecibels, hi = analyser.maxDecibels;
+    const data = col.data;
+    for (let y = 0; y < H; y++) {
+      const fTop = (H - y) / H * 20000, fBot = (H - y - 1) / H * 20000;
+      let b0 = Math.floor(fBot / binHz), b1 = Math.max(b0 + 1, Math.ceil(fTop / binHz)), m = -200;
+      for (let b = b0; b < b1 && b < fbuf.length; b++) if (fbuf[b] > m) m = fbuf[b];
+      const t = Math.min(1, Math.max(0, (m - lo) / (hi - lo)));
+      const li = Math.round(Math.pow(t, 1.1) * 255) * 3;
+      const o = y * 4; data[o] = LUT[li]; data[o + 1] = LUT[li + 1]; data[o + 2] = LUT[li + 2]; data[o + 3] = 255;
+    }
+    for (let s = 0; s < step; s++) sx.putImageData(col, W - step + s, 0);
+  }
+  const slow = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let last = 0;
+  function frame(t) {
+    if (!slow || t - last > 250) {
+      // 3 s across the canvas width
+      const dt = last ? Math.min(0.1, (t - last) / 1000) : 1 / 60; last = t;
+      const pxPerSec = spec.getBoundingClientRect().width / 3;
+      drawSpec(Math.max(1, pxPerSec * dt));
+      drawRibs();
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

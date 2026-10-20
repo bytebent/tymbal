@@ -11,21 +11,30 @@ the periodical cicada *Magicicada septendecim* sings. Most of the sound lives be
 
 Unlike Throat and mouth-tube or Syrinx and beak-tube, the source and the body are one plugin.
 
-Status: **prototype, batch 07 of 11**. The reference engine has two tymbals whose ribs buckle one
+Status: **prototype, batch 08 of 11**. The reference engine has two tymbals whose ribs buckle one
 by one and retune them, matching *Cyclochila*'s measured ribs (Bennet-Clark 1997) within 1% and
 1 dB, and a body they drive. The lock lets the body's ringing time each rib: a slack
 *Magicicada septendecim* sings an unbroken Q 25 tone, in tune within a cent, and turns pulsed when
 made stiff. One muscle clock per voice sings echemes and phrases, Sync or Async, and in Rate mode
 the note sets the pulse rate. Tymbal moths come into hearing range with Time (*Bertholdia*, the
 moth that jams bat sonar, at ×8), leafhoppers and planthoppers sing through a plant stem, and the
-bladder cicada sings through its swollen abdomen. Next: the bench, chorus, the C++ port and the
-JUCE plugin.
+bladder cicada sings through its swollen abdomen. The bench plays all of it in a browser. Next:
+chorus, the C++ port and the JUCE plugin.
 
 ## Try it
 
 Needs Node 18 or newer. No packages to install.
 
+Open `tools/tymbal.html` in a current browser (Chrome, Edge, Firefox or Safari) and press Power
+on. Play with the computer keyboard (A–; for notes, Z/X octave, C/V velocity; C3 plays the
+carrier at C8, 4186 Hz) or pick a test preset and press Load and play. The black screen shows a
+spectrogram and, under it, every rib's click on the left and right tymbal: orange when it locked
+to the body's ringing, grey when it fired on its own timing.
+
+To rebuild the page after changing the engine or presets:
+
 ```sh
+node tools/bench/build.js        # → tools/tymbal.html
 node tests/engine-test.js        # engine tests
 node tools/render-presets.js     # test presets → renders/*.wav
 node tools/perf.js               # CPU per scenario
@@ -53,14 +62,14 @@ over.
 - `reference/presets.js`: test presets (bench and tests only)
 - `tests/engine-test.js`: engine tests
 - `tools/render-presets.js`, `tools/perf.js`: preset renders, benchmark
+- `tools/bench/`: bench template, AudioWorklet wrapper, build script → `tools/tymbal.html`
 
 Later (see `plan.md`):
 
 - `source/TymbalDSP.h`: C++ port, real-time safe, no JUCE dependency
 - `source/PluginProcessor.*`, `source/PluginEditor.*`, `ui/index.html`: JUCE instrument and its
   web-view interface
-- `tools/bench/` (`tymbal.html`), the C++ comparison and plugin tests,
-  `packaging/`, CI
+- the C++ comparison and plugin tests, `packaging/`, CI
 
 ## License note
 

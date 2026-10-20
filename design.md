@@ -30,6 +30,7 @@ still to decide. Sources for every number are in `research.md`.
 - Built the bytebent way: JavaScript reference engine and browser bench first, then the C++
   port, then the JUCE plugin. [Decided]
 - Plugin code and accent colour: [Open]. Proposed: `Tymb`, orange (no other Creature uses it).
+  The bench uses the orange (#f08a24).
 
 ## 2. Signal flow
 
@@ -520,5 +521,15 @@ Engine interface: `new TymbalEngine(sr, seed)`, `setParam`, `noteOn` / `noteOff`
 ## 14. Live view
 
 The black screen at the top shows, per tymbal, each rib as a tick on a time strip: lit when it
-locked to the body, grey when it fired on its own nerve timing. Under it, the body's envelope.
-Stiffness and Scatter show their effect directly. [Proposed]
+locked to the body, grey when it fired on its own nerve timing, and each OUT click as a short dim
+tick. Under it, the output envelope (peak per audio callback, 60 dB scale). The strip shows the
+last 50 ms, 250 ms or 1 s. Stiffness and Scatter show their effect directly. Above it, a
+spectrogram 0–20 kHz over the last 3 s. [Decided for the bench in batch 08; the plugin's view
+follows after the listening round]
+
+Readouts: the newest voice's carrier (Hz and note), pulses per second, the share of recent ribs
+that locked, the pitch keeper's correction in cents (while ribs lock), Time × Link, voices,
+keyboard octave and velocity, bend, and DSP load.
+
+The engine keeps the last 1024 clicks in a ring (time in oversampled samples, side, kind: 1 IN
+locked, 2 IN own timing, 3 OUT); the bench's worklet sends the new ones about 30 times a second.

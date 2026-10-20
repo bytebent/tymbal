@@ -47,6 +47,8 @@
   const MAX_VOICES = 8;
   const MAX_RIBS = 24;
   const MAX_EV = 64;            // queued events per tymbal (one stroke: ≤ 24 IN, ≤ 25 OUT)
+  const VIEW_N = 1024;          // recent clicks kept for the live view (a ring; power of two)
+  const VIEW_IN_LOCKED = 1, VIEW_IN_OWN = 2, VIEW_OUT = 3;
   const TWO_PI = 2 * Math.PI;
   const F_CAP = 16000;          // the carrier drops whole octaves above this
   const F_MIN = 20;
@@ -223,6 +225,7 @@
       this.evRib = new Uint8Array(MAX_EV);     // rib index (1-based), or the rib left IN after a pop
       this.evA = new Float64Array(MAX_EV);     // amplitude
       this.evDec = new Uint8Array(MAX_EV);     // 1 once the lock has set its moment
+      this.evLock = new Uint8Array(MAX_EV);    // 1 if the lock moved it into phase (for the live view)
       this.reset();
     }
     reset() {
@@ -267,7 +270,7 @@
         if (k > 1 && t >= tOut - 1) break;      // the muscle lets go before this rib buckles
         if (sc > 0) t += sc * (2 * v.rand() - 1);
         if (n > 0 && t <= this.evT[n - 1]) t = this.evT[n - 1] + 1;
-        this.evT[n] = t; this.evKind[n] = EV_IN; this.evRib[n] = k; this.evA[n] = A * e.ribGain[k]; this.evDec[n] = 0; n++; nIn = k;
+        this.evT[n] = t; this.evKind[n] = EV_IN; this.evRib[n] = k; this.evA[n] = A * e.ribGain[k]; this.evDec[n] = 0; this.evLock[n] = 0; n++; nIn = k;
       }
       // popping out: the recruited ribs in reverse order, then the plate
       const nPop = Math.round(e.outclicks * nIn);
@@ -316,6 +319,9 @@
       else if (kind === EV_OUTRIB) { f = k > 0 ? e.ribF[k] : e.outF; Q = k > 0 ? e.ribQ[k] : e.outQ; phase = CLICK_PHASE + Math.PI; this.state = k; }
       else { f = e.outF; Q = e.outQ; phase = CLICK_PHASE + Math.PI; this.state = 0; }
       if (this.side) { f = Math.min(f * e.asymF, F_CAP); Q /= e.asymF; }
+      // the live view's record: when, which side, locked or not
+      const vi = e.vN++ & (VIEW_N - 1);
+      e.vT[vi] = this.evT[i]; e.vS[vi] = this.side; e.vK[vi] = kind !== EV_IN ? VIEW_OUT : this.evLock[i] ? VIEW_IN_LOCKED : VIEW_IN_OWN;
       // the lock gate compares with the peak since the last click (Bennet-Clark 1997: the preceding pulse)
       v.pk2 = v.b0r * v.b0r + v.b0i * v.b0i;
       this.pk2 = (this.zr + this.wr) * (this.zr + this.wr) + (this.zi + this.wi) * (this.zi + this.wi);
@@ -382,6 +388,7 @@
       this.nextCycle = Infinity; this.uStart = 0; this.uOn = 0; this.uEnd = -Infinity; this.uFirst = true;
       this.burstIdx = 0; this.burstJ = 1; this.rubF = 1; this.rubT = 1; this.rubLeft = 0; this.fallU = 0;
       this.timeF = 1;                            // Time × Link's tape factor
+      this.cycleNow = 0;                         // the last muscle cycle, samples (readout)
       // Plant: all-pass chain states (x[n−1], y[n−1] per stage), its coefficient, the contact high-pass
       this.apX.fill(0); this.apY.fill(0); this.apA = 0; this.hpX = 0; this.hpY = 0; this.kHP = 1;
       // body: main mode b0 and two cavity modes, a low-pass, the peak the lock gate uses
@@ -504,6 +511,7 @@
         t.pendC = C; t.pendF = force;
       }
       this.nextCycle = T + C;
+      this.cycleNow = C;
     }
 
     // once per block: Time and Link, Rubato drifts, the phrase position sets the fall
@@ -540,7 +548,7 @@
         if (amp2 >= LOCK_GATE * LOCK_GATE * pk2) {
           const w = e.lockW * Math.PI / om;      // up to half a period, less as Stiffness rises
           t = tn + clamp(tstar - tn, -w, w);
-          if (Math.abs(tstar - tn) <= w + 1e-9) { e.stats.locked++; locked = 1; }
+          if (Math.abs(tstar - tn) <= w + 1e-9) { e.stats.locked++; locked = 1; tym.evLock[i] = 1; }
         }
       }
       this.lockFrac += 0.05 * (locked - this.lockFrac);
@@ -710,12 +718,13 @@
       this.dc = { xl: 0, yl: 0, xr: 0, yr: 0, R: 1 - 2 * Math.PI * 10 / sampleRate };
       this.osTimeBase = 0; this.onsets = null;
       this.stats = { ins: 0, locked: 0 };
+      this.vT = new Float64Array(VIEW_N); this.vS = new Uint8Array(VIEW_N); this.vK = new Uint8Array(VIEW_N); this.vN = 0;
       this.pkDec = Math.exp(-2 / (PEAK_TAU * this.srOS));
       const base = (seed >>> 0) || 0x9e3779b9;
       this.voices = [];
       for (let i = 0; i < MAX_VOICES; i++) this.voices.push(new Voice(this, (base + i * 0x6d2b79f5) >>> 0));
       this.updateControls();
-      this.info = { voices: 0, carrier: 0, rib: 0, f: 0, q: 0 };
+      this.info = { voices: 0, carrier: 0, rib: 0, f: 0, q: 0, pulses: 0, lock: 0, keeper: 0, time: 1, effort: 0 };
     }
 
     static get LATENCY() { return BLOCK; }
@@ -928,7 +937,13 @@
         if (v.stage === 0) continue;
         v.render(nOS, oL, oR);
         count++;
-        if (v.age > newest) { newest = v.age; this.info.carrier = v.fNow; this.info.rib = v.tym[0].state; this.info.f = v.tym[0].lastF; this.info.q = v.tym[0].lastQ; }
+        if (v.age > newest) {
+          newest = v.age; this.info.carrier = v.fNow; this.info.rib = v.tym[0].state; this.info.f = v.tym[0].lastF; this.info.q = v.tym[0].lastQ;
+          // pulses per second (both tymbals), the recent lock share, the keeper's correction, Time × Link
+          const both = this.tymOn[0] && this.tymOn[1] ? 2 : 1;
+          this.info.pulses = v.cycleNow > 0 ? both * this.srOS / v.cycleNow : 0;
+          this.info.lock = v.lockFrac; this.info.keeper = v.kc * 1200; this.info.time = v.timeF; this.info.effort = v.effortNow;
+        }
       }
       this.osTimeBase += nOS;
       this.info.voices = count; this.info.idle = false;
@@ -967,7 +982,7 @@
     }
   }
 
-  TymbalEngine.BLOCK = BLOCK; TymbalEngine.OS = OS;
+  TymbalEngine.BLOCK = BLOCK; TymbalEngine.OS = OS; TymbalEngine.VIEW_N = VIEW_N;
   TymbalEngine.toNorm = toNorm; TymbalEngine.fromNorm = fromNorm;
   const core = { BL_F_REST, BL_Q_REST, BL_LVL_REST, BL_VENTRAL, AP_STAGES, DISP_MAX, STEM_RATIOS, CARRIER_OCT, JITTER_SD, RUBATO_SD, ASYNC_RUNDOWN, FALL_ST, FALL_DB, FALL_SHARE, INTRO_POW, CLICK_PHASE, KAPPA, TRANS_CYC, TRANS_LAG, LOCK_AIM, A_REF, HEAT_BASE, OUTRIB_DB, LOCK_GATE, BODY_GAIN, AP_F_CLOSED, AP_Q_CLOSED, AP_DB_CLOSED };
   if (typeof module !== 'undefined' && module.exports) module.exports = { TymbalEngine, PARAMS, core };

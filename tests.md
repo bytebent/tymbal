@@ -5,6 +5,25 @@ tests with `node tests/engine-test.js`.
 
 **Now: 94 engine tests passing** (about 12 s). Benchmark: `node tools/perf.js`.
 
+## Batch 08 · bench
+
+`tools/tymbal.html` loaded in headless Chromium (Playwright): Power on, preset 02 with Load and
+play, a held key on the Plant body, then a 390 px wide window. No page or console errors; no
+horizontal scroll on the phone width; controls that do nothing in the current mode grey out
+(Carrier in Carrier mode, the other bodies' controls, the other song modes').
+
+| Check | Result |
+|---|---|
+| Preset 02, *Cyclochila* calling song | carrier 4.19 kHz (C8), 235 pulses/s (117 Hz × 2), 61% of ribs locked |
+| Held C3, Plant body | 234 pulses/s, 35% locked |
+| DSP meter, one voice | about 2–5% in the worklet |
+| Engine tests after the live-view additions | 94 passing |
+
+Seen on the bench: in the *Cyclochila* calling song the pitch keeper sits near +90 cents (its
+limit is 120). Without it the song's peak is 81 cents flat of the carrier (3994 Hz); with it,
+17 cents sharp (4228 Hz). Partial locking pulls pitch more than the keeper's body-phase measure
+assumes. For the listening round: hear whether the keeper should stay on below about 70% lock.
+
 ## Batch 07 · bladder
 
 How it is built: three panels (both sides of tergites 3–5 and the sternites), each a complex
