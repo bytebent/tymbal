@@ -4,6 +4,10 @@
 'use strict';
 const st = (f) => 12 * Math.log2(f / 4186.01);           // semitones from C8 to f
 function place(f) { const s = st(f), t = Math.round(s); return { transpose: t, detune: Math.round((s - t) * 100) }; }
+// below 262 Hz Transpose runs out (−48 st): place the carrier with the note instead
+function low(f) { const s = 12 * Math.log2(f / 261.626), t = Math.round(s); return { params: { transpose: -48, detune: Math.round((s - t) * 100) }, note: 60 + t }; }
+const MOTH = { time: 8, body: 2, stiffness: 1, outratio: 1, outclicks: 1, outspeed: 1, hold: 0.5, attack: 0.001, sustain: 1 };
+const S_TIT = low(234), S_TIT_M = low(255), TETT = low(400);
 
 // Cyclochila australasiae, Bennet-Clark 1997 Table 2: rib 2 on the carrier (4.19 kHz)
 const CYC_RIBS = { ribs: 4, first: 0.73, tilt: -4.83, firstlevel: -0.09, taper: -8.27, outratio: 1.561, outlevel: -9.45 };
@@ -55,10 +59,10 @@ const PRESETS = [
     switchAt: { time: 1.0, id: 'heat', value: 35 },
   },
   {
-    name: '08 Moth sketch (Bertholdia, slowed by hand)',
-    note: 'Preview for batch 06: 21 striations 0.57 ms apart sweeping down, a pause, then the passive half-cycle; about 6 kHz, no body. Time scaling comes later.',
-    params: Object.assign(place(6000), { rate: 4.2, ribs: 21, recruit: 21, spacing: 0.57, tilt: -18, first: 6, taper: -4, tymbalq: 8, outratio: 1, outlevel: -3, outclicks: 1, outspeed: 1, hold: 0.5, body: 2, pair: 1, stiffness: 0.8, attack: 0.001, sustain: 1 }),
-    phrase: [[60, 0, 1.5]],
+    name: '08 Bertholdia trigona, ×8',
+    note: 'The tiger moth that jams bat sonar (Corcoran et al. 2009, 2010): 21.5 clicks over a 12.2 ms active half-cycle, a pause, the passive half-cycle, 29.5 ms per cycle; dominant 48.7 kHz, −15 dB from 21.9 to 83.1 kHz. Natural timing with Time ×8: a 236 ms cycle, about 6 kHz. Spread of rib pitches fitted to the band; one tymbal.',
+    params: Object.assign(place(7600), MOTH, { rate: 1000 / 29.5, pair: 1, ribs: 22, recruit: 22, spacing: 0.57, first: 5, tilt: -9.5, taper: -3, tymbalq: 9, outlevel: -6 }),
+    phrase: [[60, 0, 2.5]],
   },
   {
     name: '09 Cyclochila closing its opercula',
@@ -104,6 +108,54 @@ const PRESETS = [
     note: 'Echemes shorter than a muscle cycle: one stroke each, 5 per second (the ticks of M. cassini\'s phrase start, on their own).',
     params: Object.assign({}, CASSINI, { song: 1, echeme: 0.005, gap: 0.2, jitter: 0.3, rubato: 0.2 }),
     phrase: [[60, 0, 2.5]],
+  },
+  {
+    name: '16 Cycnia tenera, ×8',
+    note: 'Dogbane tiger moth (Corcoran et al. 2010; Fullard): 7.5 clicks per 6.5 ms half-cycle, 22.7 ms cycle, 63.5 kHz, in bursts of 1–20 cycles. Time ×8: 182 ms cycles at about 7.9 kHz. Burst lengths and gaps are estimates.',
+    params: Object.assign(place(63500 / 8), MOTH, { rate: 1000 / 22.7, pair: 1, ribs: 8, recruit: 8, spacing: 0.87, first: 3, tilt: -7, taper: -2, tymbalq: 7, outlevel: -4, song: 1, echeme: 0.12, gap: 0.15, jitter: 0.2 }),
+    phrase: [[60, 0, 4.0]],
+  },
+  {
+    name: '17 Achroia grisella, ×8',
+    note: 'Lesser wax moth, a pyraloid (Jang & Greenfield 1996; Snedden 1994): 100–150 µs pulses at 70–130 kHz in pairs, 80–100 pairs per second. Time ×8: about 11 pairs per second at 12.5 kHz. The gap inside a pair is an estimate.',
+    params: Object.assign(place(100000 / 8), MOTH, { rate: 90, ribs: 1, recruit: 1, lrphase: 0.06, tymbalq: 8, outlevel: -14, outclicks: 0, jitter: 0.05 }),
+    phrase: [[60, 0, 3.0]],
+  },
+  {
+    name: '18 Scaphoideus titanus, female',
+    note: 'Grapevine leafhopper (Mazzoni et al. 2009): vibrational pulses through the stem, about 23 per second at about 234 Hz, energy below 900 Hz. Plant body; pulse shape and stem are estimates.',
+    params: Object.assign(S_TIT.params, { body: 3, rate: 23, pair: 1, ribs: 1, recruit: 1, tymbalq: 3, outlevel: -12, stem: 250, bodyq: 6, distance: 0.4, stiffness: 1, jitter: 0.08, attack: 0.002, sustain: 1 }),
+    phrase: [[S_TIT.note, 0, 2.5]],
+  },
+  {
+    name: '19 Scaphoideus titanus, male courtship',
+    note: 'Pulse trains at about 82 per second at 255 Hz (Mazzoni et al. 2009); the four-part phrase is simplified to trains with pauses (estimates).',
+    params: Object.assign(S_TIT_M.params, { body: 3, rate: 41, ribs: 2, recruit: 2, spacing: 3, tymbalq: 4, outlevel: -10, stem: 250, bodyq: 6, distance: 0.5, stiffness: 0.8, song: 1, echeme: 0.6, gap: 0.35, jitter: 0.08, rubato: 0.1, attack: 0.01 }),
+    phrase: [[S_TIT_M.note, 0, 4.0]],
+  },
+  {
+    name: '20 Planthopper snapping organ',
+    note: 'Davranoglou et al. 2019: one cycle every 0.3–1 s, two elastic recoils per cycle, broadband 50–5000 Hz through the plant (Virant-Doberlet et al. 2023). Carrier, stem and the gap between recoils are estimates.',
+    params: Object.assign(place(800), { body: 3, rate: 1.6, pair: 1, ribs: 1, recruit: 1, tymbalq: 2, outratio: 1.3, outlevel: -2, hold: 0.12, stem: 180, bodyq: 5, distance: 0.6, stiffness: 1, jitter: 0.15, attack: 0.001, sustain: 1 }),
+    phrase: [[60, 0, 4.0]],
+  },
+  {
+    name: '21 Tettigarcta (estimate)',
+    note: 'The hairy cicada: primitive tymbals, no resonant air sac, faint signals carried by the substrate (Claridge, Morgan & Moulds 1999). No measured numbers: carrier, rate and ribs are guesses for listening.',
+    params: Object.assign(TETT.params, { body: 3, rate: 30, ribs: 3, recruit: 3, spacing: 1.5, tilt: -3, tymbalq: 4, outlevel: -8, stem: 300, bodyq: 5, distance: 0.3, stiffness: 0.8, song: 1, echeme: 0.8, gap: 0.6, jitter: 0.1, attack: 0.01 }),
+    phrase: [[TETT.note, 0, 4.0]],
+  },
+  {
+    name: '22 Hopper purr, Rate mode',
+    note: 'Small hoppers\' pure-tone vibrational signals follow muscle rate, rising with temperature (Tishechkin 2013): here the note sets the pulse rate, through a 200 Hz stem. For playing.',
+    params: { playmode: 1, body: 3, carrier: 600, ribs: 2, recruit: 2, spacing: 0.8, tymbalq: 4, outlevel: -10, stem: 200, bodyq: 6, distance: 0.3, stiffness: 0.8, asym: 0, glide: 0.05, attack: 0.02, release: 0.1 },
+    phrase: [[36, 0, 0.7], [43, 0.75, 0.7], [48, 1.5, 0.7], [41, 2.25, 1.2]],
+  },
+  {
+    name: '23 Link: Bertholdia played down an octave',
+    note: 'Link 1 makes Time follow the note like tape: an octave lower, every time doubles.',
+    params: Object.assign(place(7600), MOTH, { rate: 1000 / 29.5, pair: 1, ribs: 22, recruit: 22, spacing: 0.57, first: 5, tilt: -9.5, taper: -3, tymbalq: 9, outlevel: -6, link: 1 }),
+    phrase: [[60, 0, 1.2], [48, 1.3, 2.4]],
   },
 ];
 

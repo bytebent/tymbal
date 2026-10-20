@@ -603,6 +603,151 @@ const CASS_PHRASE = Object.assign({}, CASS, { song: 2, phrase: 2.5, rest: 1, int
   check('song, Rubato, Jitter, Async and Rate mode: same output at buffer sizes 1, 64, 999', same);
 }
 
+// ================= batch 06: moths, hoppers, Time, Link, guard, Plant =================
+const PRE = require(path.join(__dirname, '..', 'reference', 'presets.js')).PRESETS;
+const presetP = (n) => PRE.find(p => p.name.startsWith(n));
+// RBJ band-pass (constant 0 dB peak), run over a whole signal
+function bandpass(x, f, q) {
+  const w = 2 * Math.PI * f / SR, al = Math.sin(w) / (2 * q), a0 = 1 + al;
+  const b0 = al / a0, b2 = -al / a0, a1 = -2 * Math.cos(w) / a0, a2 = (1 - al) / a0;
+  const y = new Float64Array(x.length); let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+  for (let i = 0; i < x.length; i++) { const v = b0 * x[i] + b2 * x2 - a1 * y1 - a2 * y2; x2 = x1; x1 = x[i]; y2 = y1; y1 = v; y[i] = v; }
+  return y;
+}
+// share of energy inside [lo, hi] Hz over x[a, b) (FFT-free: band-limited DFT on a grid)
+function bandShare(x, a, b, lo, hi, fmax) {
+  let inside = 0, all = 0; const n = b - a;
+  for (let f = 10; f <= fmax; f += 10) {
+    let re = 0, im = 0; const w = 2 * Math.PI * f / SR;
+    for (let i = 0; i < n; i++) { const h = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / n), v = x[a + i] * h; re += v * Math.cos(w * i); im += v * Math.sin(w * i); }
+    const p = re * re + im * im; all += p; if (f >= lo && f <= hi) inside += p;
+  }
+  return inside / all;
+}
+const playPreset = (pr, seconds, opts) => songRun(Object.assign({}, pr.params, (opts && opts.extra) || {}), seconds, Object.assign({ note: pr.phrase[0][0] }, opts || {}));
+
+// ---------- Bertholdia at Time ×8 (Corcoran et al. 2009, 2010) ----------
+{
+  const pr = presetP('08');
+  const { L, e } = playPreset(pr, 1.0, { vel: 127, extra: { jitter: 0 } });
+  const st = e.onsets.map(o => o[0]);
+  const per = (st[st.length - 1] - st[0]) / (st.length - 1);
+  check('Bertholdia ×8: modulation cycle 236 ms (29.5 ms × 8)', Math.abs(per - 0.236) < 1e-6, (per * 1000).toFixed(2) + ' ms');
+  // clicks in one active half-cycle (12.2 ms × 8): envelope in 0.25 ms steps
+  const a = Math.round(st[1] * SR) + DELAY, ev = stepEnv(L, a, a + Math.round(0.110 * SR), SR / 4000), top = Math.max(...ev);
+  let n = 0, armed = true; for (const v of ev) { if (armed && v > 0.25 * top) { n++; armed = false; } else if (!armed && v < 0.12 * top) armed = true; }
+  check('Bertholdia ×8: 21.5 clicks per active half-cycle (22 at full effort)', n >= 21 && n <= 22, n + ' clicks');
+  // spectrum: smoothed peak and −15 dB band, ×8 back to nature
+  const N = Math.round(0.236 * SR), pk = [];
+  for (let f = 1000; f <= 14000; f += 100) { let re = 0, im = 0; const w = 2 * Math.PI * f / SR; for (let i = 0; i < N; i++) { re += L[a + i] * Math.cos(w * i); im += L[a + i] * Math.sin(w * i); } pk.push([f, 10 * Math.log10(re * re + im * im)]); }
+  // the spectrum is broad and flat on top: average the power over ±1 kHz before finding the peak
+  const sm = pk.map(([f], i) => { const w = pk.slice(Math.max(0, i - 10), i + 11); return [f, 10 * Math.log10(w.reduce((q, x) => q + Math.pow(10, x[1] / 10), 0) / w.length)]; });
+  const best = sm.reduce((p, q) => q[1] > p[1] ? q : p), band = sm.filter(x => x[1] > best[1] - 15).map(x => x[0]);
+  const hiEdge = band[band.length - 1];
+  check('Bertholdia ×8: dominant near 6.1 kHz (48.7 kHz ÷ 8), upper −15 dB edge near 10.4 kHz (83.1 ÷ 8)', best[0] >= 5500 && best[0] <= 7000 && hiEdge >= 9000 && hiEdge <= 11500,
+    `peak ${best[0]} Hz (${(best[0] * 8 / 1000).toFixed(1)} kHz natural), band ${band[0]}–${hiEdge} Hz (${(band[0] * 8 / 1000).toFixed(1)}–${(hiEdge * 8 / 1000).toFixed(1)} kHz; the low edge sits on the clicks' onset floor, see tests.md)`);
+}
+
+// ---------- Time: every muscle, rib and song time scales together ----------
+{
+  const times = (k, extra) => {
+    const p = Object.assign({}, CYC, { rate: 10, spacing: 2, recruit: 4, hold: 0.9, time: k, jitter: 0 }, extra || {});
+    const { L, e } = songRun(p, 0.5 * k + 0.1, { vel: 127 });
+    const st = e.onsets.filter(o => o[1] === 0).map(o => o[0]);
+    // rib clicks of the second stroke, from the envelope
+    const a = Math.round(st[1] * SR) + DELAY, ev = stepEnv(L, a, a + Math.round(0.0075 * k * SR), 24), top = Math.max(...ev);
+    // ribs 2 ms apart dip to about 26% between them; rib 4 peaks at about 38%
+    const on = []; let armed = true; ev.forEach((v, i) => { if (armed && v > 0.34 * top) { on.push(i * 24 / SR); armed = false; } else if (!armed && v < 0.3 * top) armed = true; });
+    return { cycle: st[1] - st[0], rib: (on[on.length - 1] - on[0]) / (on.length - 1) };
+  };
+  const t1 = times(1), t4 = times(4);
+  check('Time ×4: the stroke cycle and the rib spacing both stretch 4×', Math.abs(t4.cycle / t1.cycle - 4) < 1e-6 && Math.abs(t4.rib / t1.rib - 4) < 0.05,
+    `cycle ${(t1.cycle * 1000).toFixed(1)} → ${(t4.cycle * 1000).toFixed(1)} ms, ribs ${(t1.rib * 1000).toFixed(2)} → ${(t4.rib * 1000).toFixed(2)} ms`);
+  const echemes = (k) => { const { e } = songRun(Object.assign({}, CYCS, { song: 1, echeme: 0.05, gap: 0.05, rate: 100, jitter: 0, time: k }), 1.2 * k); const f = []; let last = -1; for (const o of e.onsets) if (o[1] === 0) { if (o[0] - last > 0.03 * k) f.push(o[0]); last = o[0]; } return (f[f.length - 1] - f[0]) / (f.length - 1); };
+  const e1 = echemes(1), e3 = echemes(3);
+  check('Time ×3: echemes and gaps stretch 3× too', Math.abs(e3 / e1 - 3) < 0.01, `echeme period ${(e1 * 1000).toFixed(1)} → ${(e3 * 1000).toFixed(1)} ms`);
+  const rateOf = (k) => { const { e } = songRun(Object.assign({}, CYCS, { playmode: 1, jitter: 0, time: k }), 1.0); const o = e.onsets.filter(x => x[0] > 0.2); return (o.length - 1) / (o[o.length - 1][0] - o[0][0]); };
+  check('Rate mode: Time stretches the ribs but leaves the note\'s rate alone', Math.abs(rateOf(4) / rateOf(1) - 1) < 1e-6, `${rateOf(1).toFixed(3)} and ${rateOf(4).toFixed(3)} /s`);
+}
+
+// ---------- Link: Time follows the note like tape ----------
+{
+  const cyc = (link, note) => { const { e } = songRun(Object.assign({}, CYCS, { rate: 20, link, jitter: 0 }), 0.8, { note }); const s = e.onsets.filter(o => o[1] === 0).map(o => o[0]); return s[1] - s[0]; };
+  const r1 = cyc(1, 48) / cyc(1, 60), r0 = cyc(0, 48) / cyc(0, 60), rh = cyc(0.5, 48) / cyc(0.5, 60), up = cyc(1, 72) / cyc(1, 60);
+  check('Link 1: an octave down doubles every time, an octave up halves it', Math.abs(r1 - 2) < 1e-6 && Math.abs(up - 0.5) < 1e-6, `×${r1.toFixed(4)}, ×${up.toFixed(4)}`);
+  check('Link 0.5: an octave down stretches by √2; Link 0 leaves time alone', Math.abs(rh - Math.SQRT2) < 1e-6 && Math.abs(r0 - 1) < 1e-9, `×${rh.toFixed(4)}, ×${r0.toFixed(4)}`);
+}
+
+// ---------- the guard: 20 Hz–16 kHz at any note, Time and setting ----------
+{
+  let lo = Infinity, hi = 0;
+  const probe = (extra) => {
+    for (let note = 0; note <= 127; note += 3) {
+      const e = new TymbalEngine(SR, 1);
+      for (const [k, v] of Object.entries(Object.assign({ asym: 1 }, extra))) e.setParam(k, v);
+      e.noteOn(note, 100);
+      const L = new Float32Array(256), R = new Float32Array(256); e.process(L, R, 256);
+      const fs = [e.fCarrier, e.outF, Math.min(e.outF * e.asymF, 16000)]; for (let k = 1; k <= e.ribs; k++) fs.push(e.ribF[k], Math.min(e.ribF[k] * e.asymF, 16000));
+      for (const f of fs) { lo = Math.min(lo, f); hi = Math.max(hi, f); }
+    }
+  };
+  probe({ transpose: 48, first: 12, tilt: 12, outratio: 3, time: 0.1 });
+  probe({ transpose: -48, first: -12, tilt: -36, ribs: 24, recruit: 24, time: 32 });
+  probe({ playmode: 1, carrier: 16000, first: 12, outratio: 3 });
+  probe({ playmode: 1, carrier: 50, first: -12, tilt: -36, ribs: 24 });
+  check('every resonator stays within 20 Hz–16 kHz (notes 0–127, Transpose ±48, First ±12, Tilt, Out ratio 3, Asym 1)', lo >= 20 && hi <= 16000, `${lo.toFixed(1)} Hz – ${hi.toFixed(0)} Hz`);
+  // and the sound: the highest and lowest settings keep their energy inside
+  // (a Q 20 resonance at 16 kHz spills its skirt a little past it; nothing rings above 18 kHz)
+  const top = songRun({ transpose: 48, first: 12, outratio: 3, body: 2, tymbalq: 20 }, 0.5, { note: 120 });
+  const above = 1 - bandShare(top.L, Math.round(0.1 * SR), Math.round(0.3 * SR), 0, 18000, 23500);
+  const bot = songRun({ playmode: 1, carrier: 50, body: 2, tymbalq: 20, outratio: 1 }, 1.0, { note: 30 });
+  const below = 1 - bandShare(bot.L, Math.round(0.3 * SR), Math.round(0.9 * SR), 20, 24000, 2000);
+  check('energy above 18 kHz and below 20 Hz stays under −20 dB at the extremes', 10 * Math.log10(above) < -20 && 10 * Math.log10(below) < -20,
+    `above ${(10 * Math.log10(above)).toFixed(1)} dB, below ${(10 * Math.log10(below)).toFixed(1)} dB`);
+}
+
+// ---------- hoppers: inside 50–900 Hz (S. titanus), 50–5000 Hz (planthoppers) ----------
+{
+  const f = presetP('18'), m = presetP('19'), ph = presetP('20');
+  const sf = bandShare(playPreset(f, 1.2).L, Math.round(0.3 * SR), Math.round(1.1 * SR), 50, 900, 6000);
+  const sm = bandShare(playPreset(m, 1.2).L, Math.round(0.1 * SR), Math.round(0.6 * SR), 50, 900, 6000);
+  const sp = bandShare(playPreset(ph, 1.4).L, 0, Math.round(1.4 * SR), 50, 5000, 12000);
+  check('S. titanus presets: over 90% of the energy in 50–900 Hz', sf > 0.9 && sm > 0.9, `female ${(sf * 100).toFixed(1)}%, male ${(sm * 100).toFixed(1)}%`);
+  check('planthopper snapping organ: over 90% in 50–5000 Hz', sp > 0.9, `${(sp * 100).toFixed(1)}%`);
+}
+
+// ---------- Plant: dispersion and the stem's modes ----------
+{
+  // one broadband click (a low-Q 1 kHz tymbal) through the stem; when does each band arrive?
+  const click = (distance) => {
+    const p = Object.assign(placeAt(1000), { body: 3, ribs: 1, recruit: 1, rate: 1, tymbalq: 2, outlevel: -40, pair: 1, stiffness: 1, jitter: 0, scatter: 0, distance, stem: 120, bodyq: 1, attack: 0.001, sustain: 1 });
+    return songRun(p, 0.2).L;
+  };
+  const arrival = (x, f) => { const y = bandpass(x, f, 2); let s = 0, w = 0; for (let i = 0; i < y.length; i++) { const p = y[i] * y[i]; s += p * i; w += p; } return s / w / SR * 1000; };
+  const far = click(1), near = click(0);
+  const dFar = arrival(far, 150) - arrival(far, 1500), dNear = arrival(near, 150) - arrival(near, 1500);
+  // (the measuring band-passes delay 150 Hz more than 1.5 kHz themselves: compare against Distance 0)
+  check('Plant, Distance 1: low frequencies arrive later than high (bending waves are dispersive)', dFar - dNear > 5,
+    `150 Hz after 1.5 kHz by ${(dFar - dNear).toFixed(1)} ms more than at Distance 0`);
+  // the stem's modes: a slack click into a 300 Hz stem rings at 300 Hz and 2.76 × 300 Hz
+  const p = Object.assign(placeAt(1500), { body: 3, ribs: 1, recruit: 1, rate: 3, tymbalq: 2, outlevel: -40, pair: 1, stiffness: 1, jitter: 0, distance: 0, stem: 300, bodyq: 12, attack: 0.001, sustain: 1 });
+  const { L } = songRun(p, 0.4), open = songRun(Object.assign({}, p, { body: 2 }), 0.4).L;
+  // the stem's response: the Plant output against the bare tymbal
+  const at = (f) => specDb(L, 0, Math.round(0.3 * SR), f, true) - specDb(open, 0, Math.round(0.3 * SR), f, true);
+  const m0 = at(300) - Math.max(at(220), at(400)), m1 = at(827) - Math.max(at(700), at(950));
+  check('Plant: the stem rings at Stem and 2.76 × Stem', m0 > 6 && m1 > 3, `300 Hz +${m0.toFixed(1)} dB, 827 Hz +${m1.toFixed(1)} dB above their neighbours`);
+}
+
+// ---------- Time, Link and Plant: buffer-size independent ----------
+{
+  const p = Object.assign({}, presetP('19').params, { link: 0.7, time: 1.7, mode: 1 });
+  const notes = [[48, 100, 0, 0.6], [55, 90, 0.27, 0.9]];
+  const ref = render(1.0, p, { block: 1, notes }).L;
+  let same = true;
+  for (const bl of [64, 999]) { const x = render(1.0, p, { block: bl, notes }).L; for (let i = 0; i < x.length; i++) if (x[i] !== ref[i]) { same = false; break; } }
+  check('Plant, Time and Link: same output at buffer sizes 1, 64, 999', same);
+}
+
 // ---------- every parameter in range at its default ----------
 check('parameter table: defaults inside their ranges', PARAMS.every(p => p.def >= p.min && p.def <= p.max), PARAMS.length + ' parameters');
 

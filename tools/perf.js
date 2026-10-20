@@ -24,9 +24,12 @@ const SCENARIOS = [
   ['1 voice, Open body (01 at song speed)', Object.assign({}, preset('01'), { rate: 117, spacing: 0.6 }), [60]],
   ['1 voice, Async (13)', preset('13'), [60]],
   ['1 voice, Rate mode at C6 (14)', preset('14'), [84]],
+  ['1 voice, moth (Bertholdia ×8, 08)', preset('08'), [60]],
+  ['1 voice, Plant body (S. titanus male, 19)', preset('19'), [43]],
   ['1 voice, worst case', WORST, [60]],
   ['8 voices, defaults', { mode: 1 }, chord],
   ['8 voices, Cyclochila calling song', Object.assign({}, preset('02'), { mode: 1 }), chord],
+  ['8 voices, Plant body', Object.assign({}, preset('19'), { mode: 1 }), chord.map(n => n - 12)],
   ['8 voices, worst case', Object.assign({}, WORST, { mode: 1 }), chord],
 ];
 

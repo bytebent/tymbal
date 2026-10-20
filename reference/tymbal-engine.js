@@ -20,9 +20,14 @@
  * Jitter and the drive (Sync: one command per stroke; Async: one per burst). In Carrier mode the
  * note sets the carrier, in Rate mode the pulse rate.
  *
- * Batch 04: muscles, song and Rate mode on top of batch 03's two tymbals, Helmholtz and Open
- * bodies and the lock. Every parameter of the design is in the table; the ones a later batch builds
- * are accepted and ignored until then.
+ * Time stretches every muscle, rib and song time (tape-speed scaling for ultrasonic moths, whose
+ * carriers the note already places in range); Link makes it follow the note like tape. Every
+ * resonator stays within 20 Hz–16 kHz. The Plant body carries hopper signals through a stem:
+ * dispersion (low frequencies arrive late), then three bending modes.
+ *
+ * Batch 06: moths, hoppers, Time, Link, the guard and the Plant body, on top of the muscles, song,
+ * Rate mode, two tymbals, Helmholtz and Open bodies and the lock. Every parameter of the design is
+ * in the table; the ones a later batch builds (Bladder, Chorus) are accepted and ignored until then.
  *
  * Everything runs at 4× the host rate in fixed 32-sample blocks and is decimated with a
  * windowed-sinc FIR, as in Throat, Dolphin and Syrinx. process() never allocates. Same seed, same
@@ -52,7 +57,7 @@
   const KEEP_MAX = 0.1;         // octaves
   const KEEP_LOCKED = 0.5;      // acts only while at least this share of recent ribs lock
   const A_REF = 0.25;           // click amplitude at full effort
-  const OUTRIB_DB = -6;         // ribs popping out, against the OUT plate click
+  const OUTRIB_DB = 0;          // ribs popping out, against the OUT plate click (moths: a passive half-cycle of like clicks)
   const HEAT_BASE = 1.846;      // M. cassini sub-pulses 650 → 1200 Hz from 20 to 35 °C (Young & Josephson 1983)
   const STOP_EFFORT = 0.01;     // below this the muscle stops
   // the lock (Bennet-Clark 1997: locked above about ⅓ of the last pulse's peak, broken below ¼)
@@ -78,6 +83,14 @@
   const INTRO_POW = 4;          // intro rate: Start^(1 − u⁴), low most of the intro, rising at its end
   const ECHEME_BEATS = [16, 8, 4, 2, 1, 1 / 2, 1 / 3, 1 / 4, 1 / 6, 1 / 8, 1 / 12, 1 / 16, 1 / 24, 1 / 32];
   const SONG_CONT = 0, SONG_ECHEME = 1, SONG_PHRASE = 2;
+  // Plant body: a stem carrying bending waves (dispersive: low frequencies travel slower)
+  const AP_STAGES = 8;          // first-order all-pass stages
+  const DISP_MAX = 0.02;        // s: the delay at low frequencies through the chain at Distance 1
+  const STEM_RATIOS = [1, 2.756, 5.404];   // free–free beam modes (Euler–Bernoulli)
+  const STEM_GAINS = [1, 0.5, 0.25];
+  const STEM_DIRECT = 0.35;     // the dispersed wave itself, beside the stem's resonances
+  const PLANT_GAIN = 3;         // Plant output against the bare tymbal (set by level, see tests.md)
+  const CONTACT_HZ = 40;        // contact colour: a first-order high-pass
 
   // ids, defaults and ranges: the one table the C++ core and the UI copy.
   // log: the knob moves logarithmically; curve: knob position^curve; step: whole steps.
@@ -232,7 +245,8 @@
       const cycle = this.pendC;
       const ribs = e.ribs;
       const nWant = Math.max(1, Math.min(ribs, Math.round(e.recruit * Math.sqrt(effort))));
-      const sp = e.spacingS / e.heatF, ld = e.leadS * e.leadF / e.heatF;
+      const tf = v.timeF / e.heatF;                // Time (and Link) stretch, Heat shrinks
+      const sp = e.spacingS * tf, ld = e.leadS * e.leadF * tf;
       const tOut = T0 + e.hold * cycle;
       const tEnd = T0 + cycle - 1;
       const A = A_REF * effort * e.stiffGain * (this.side ? e.asymG : 1);
@@ -291,7 +305,7 @@
       if (kind === EV_IN) { f = e.ribF[k]; Q = e.ribQ[k]; phase = CLICK_PHASE; this.state = k; e.stats.ins++; }
       else if (kind === EV_OUTRIB) { f = k > 0 ? e.ribF[k] : e.outF; Q = k > 0 ? e.ribQ[k] : e.outQ; phase = CLICK_PHASE + Math.PI; this.state = k; }
       else { f = e.outF; Q = e.outQ; phase = CLICK_PHASE + Math.PI; this.state = 0; }
-      if (this.side) { f *= e.asymF; Q /= e.asymF; }
+      if (this.side) { f = Math.min(f * e.asymF, F_CAP); Q /= e.asymF; }
       // the lock gate compares with the peak since the last click (Bennet-Clark 1997: the preceding pulse)
       v.pk2 = v.b0r * v.b0r + v.b0i * v.b0i;
       this.pk2 = (this.zr + this.wr) * (this.zr + this.wr) + (this.zi + this.wi) * (this.zi + this.wi);
@@ -344,6 +358,7 @@
       const n = BLOCK * OS;
       this.sRe = new Float64Array(n); this.sIm = new Float64Array(n);
       this.dL = new Float64Array(n); this.dR = new Float64Array(n);
+      this.apX = new Float64Array(AP_STAGES); this.apY = new Float64Array(AP_STAGES);
       this.reset();
     }
     reset() {
@@ -356,6 +371,9 @@
       // muscle clock and song: next cycle, the current echeme or phrase (start, end of sound, end)
       this.nextCycle = Infinity; this.uStart = 0; this.uOn = 0; this.uEnd = -Infinity; this.uFirst = true;
       this.burstIdx = 0; this.burstJ = 1; this.rubF = 1; this.rubT = 1; this.rubLeft = 0; this.fallU = 0;
+      this.timeF = 1;                            // Time × Link's tape factor
+      // Plant: all-pass chain states (x[n−1], y[n−1] per stage), its coefficient, the contact high-pass
+      this.apX.fill(0); this.apY.fill(0); this.apA = 0; this.hpX = 0; this.hpY = 0; this.kHP = 1;
       // body: main mode b0 and two cavity modes, a low-pass, the peak the lock gate uses
       this.b0r = this.b0i = this.b1r = this.b1i = this.b2r = this.b2i = 0; this.lp = 0; this.pk2 = 0;
       this.om0 = 0; this.r0 = 0; this.c0r = 1; this.c0i = 0; this.g0 = 0;
@@ -396,6 +414,7 @@
         for (const t of this.tym) t.reset();
         this.b0r = this.b0i = this.b1r = this.b1i = this.b2r = this.b2i = 0; this.lp = 0; this.pk2 = 0;
         this.kc = 0; this.lockFrac = 0; this.rubF = this.rubT = 1; this.rubLeft = 0; this.fallU = 0;
+        this.apX.fill(0); this.apY.fill(0); this.hpX = this.hpY = 0;
         e.voicePitch(this);
         for (const t of this.tym) t.retune(e.outF, e.outQ);
       }
@@ -423,8 +442,8 @@
       const e = this.e, sr = e.srOS;
       let on, off;
       if (e.song === SONG_ECHEME) { on = e.echemeT; off = e.gapT; } else { on = e.phraseT; off = e.restT; }
-      if (!e.sync) {
-        on *= this.rubF * this.jit(); off *= this.rubF;
+      if (!e.sync) {                             // (with Sync the beat grid wins over Time)
+        on *= this.rubF * this.jit() * this.timeF; off *= this.rubF * this.timeF;
         this.rubT = Math.exp(e.rubato * RUBATO_SD * this.gauss());
       }
       this.uStart = T; this.uOn = T + Math.max(1, on * sr); this.uEnd = this.uOn + off * sr;
@@ -453,7 +472,7 @@
       if (!this.muscleOn) { this.nextCycle = Infinity; return; }
       if (e.song !== SONG_CONT && T >= this.uEnd - 1e-6) this.newUnit(T);
       // rate: the note (Rate mode) or the Rate knob with Heat (Carrier mode), the intro, Rubato
-      let hz = e.playmode === 1 ? this.noteHz() / (e.tymOn[0] && e.tymOn[1] ? 2 : 1) : e.rateNow * e.heatF;
+      let hz = e.playmode === 1 ? this.noteHz() / (e.tymOn[0] && e.tymOn[1] ? 2 : 1) : e.rateNow * e.heatF / this.timeF;
       const p = this.phrasePos(T);
       if (p >= 0 && p < e.intro) hz *= Math.pow(e.start, 1 - Math.pow(p / e.intro, INTRO_POW));
       hz = clamp(hz * this.rubF, 0.05, RATE_MAX);
@@ -477,9 +496,12 @@
       this.nextCycle = T + C;
     }
 
-    // once per block: Rubato drifts, the phrase position sets the fall
+    // once per block: Time and Link, Rubato drifts, the phrase position sets the fall
     songBlock(t0) {
       const e = this.e, dt = BLOCK / e.sr;
+      // Link: in Carrier mode each octave below the preset's middle C doubles every time, like tape
+      this.timeF = e.timeK;
+      if (e.link > 0 && e.playmode === 0) this.timeF *= Math.pow(2, e.link * (e.refLog - (this.logF + e.bendOct)));
       if (e.song === SONG_CONT && --this.rubLeft <= 0) {
         this.rubT = Math.exp(e.rubato * RUBATO_SD * this.gauss());
         this.rubLeft = Math.round(0.3 / dt);
@@ -532,7 +554,8 @@
     silent() {
       const a = this.tym[0], b = this.tym[1];
       return a.zr === 0 && a.zi === 0 && a.wr === 0 && a.wi === 0 && b.zr === 0 && b.zi === 0 && b.wr === 0 && b.wi === 0 &&
-        this.b0r === 0 && this.b0i === 0 && this.b1r === 0 && this.b1i === 0 && this.b2r === 0 && this.b2i === 0 && this.lp === 0;
+        this.b0r === 0 && this.b0i === 0 && this.b1r === 0 && this.b1i === 0 && this.b2r === 0 && this.b2i === 0 && this.lp === 0 &&
+        this.hpY === 0 && this.apY[AP_STAGES - 1] === 0 && this.apX[0] === 0;
     }
 
     // run tymbals and body over [j0, j1)
@@ -543,6 +566,7 @@
       t0.advance(j0, j1, this.sRe, this.sIm, this.dL, this.dR, e.panL[0], e.panR[0]);
       t1.advance(j0, j1, this.sRe, this.sIm, this.dL, this.dR, e.panL[1], e.panR[1]);
       const sRe = this.sRe, sIm = this.sIm, dL = this.dL, dR = this.dR;
+      if (e.plantOn) { this.runPlant(j0, j1, oL, oR); return; }
       if (!e.bodyOn) {
         for (let j = j0; j < j1; j++) { oL[j] += dL[j]; oR[j] += dR[j]; }
         return;
@@ -566,6 +590,35 @@
       if (lp * lp < 1e-30) lp = 0;
       if (pk2 < 1e-30) pk2 = 0;
       this.b0r = b0r; this.b0i = b0i; this.b1r = b1r; this.b1i = b1i; this.b2r = b2r; this.b2i = b2i; this.lp = lp; this.pk2 = pk2;
+    }
+
+    // Plant: the tymbals' sum through the dispersive chain, then the stem's three bending modes and
+    // the dispersed wave itself, then the contact colour; mono, centred
+    runPlant(j0, j1, oL, oR) {
+      const e = this.e, sRe = this.sRe, apX = this.apX, apY = this.apY, a = this.apA;
+      let b0r = this.b0r, b0i = this.b0i, b1r = this.b1r, b1i = this.b1i, b2r = this.b2r, b2i = this.b2i;
+      const c0r = this.c0r, c0i = this.c0i, g0 = this.g0, c1r = this.c1r, c1i = this.c1i, g1 = this.g1, c2r = this.c2r, c2i = this.c2i, g2 = this.g2;
+      let hx = this.hpX, hy = this.hpY;
+      const kh = this.kHP, lvl = this.bodyLevel;
+      for (let j = j0; j < j1; j++) {
+        let x = sRe[j];
+        for (let s = 0; s < AP_STAGES; s++) { const y = a * x + apX[s] - a * apY[s]; apX[s] = x; apY[s] = y; x = y; }
+        let n = b0r * c0r - b0i * c0i + g0 * x; b0i = b0r * c0i + b0i * c0r; b0r = n;
+        n = b1r * c1r - b1i * c1i + g1 * x; b1i = b1r * c1i + b1i * c1r; b1r = n;
+        n = b2r * c2r - b2i * c2i + g2 * x; b2i = b2r * c2i + b2i * c2r; b2r = n;
+        const v = (b0r + b1r + b2r + STEM_DIRECT * x) * lvl;
+        const y = kh * (hy + v - hx); hx = v; hy = y;   // one-pole high-pass
+        oL[j] += y; oR[j] += y;
+      }
+      // flush what has died away (the chain's states together, so silent() can test one of them)
+      let quiet = true;
+      for (let s = 0; s < AP_STAGES; s++) if (apX[s] * apX[s] + apY[s] * apY[s] >= 1e-30) { quiet = false; break; }
+      if (quiet) { apX.fill(0); apY.fill(0); }
+      if (b0r * b0r + b0i * b0i < 1e-30) { b0r = 0; b0i = 0; }
+      if (b1r * b1r + b1i * b1i < 1e-30) { b1r = 0; b1i = 0; }
+      if (b2r * b2r + b2i * b2i < 1e-30) { b2r = 0; b2i = 0; }
+      if (hy * hy + hx * hx < 1e-30) { hx = 0; hy = 0; }
+      this.b0r = b0r; this.b0i = b0i; this.b1r = b1r; this.b1i = b1i; this.b2r = b2r; this.b2i = b2i; this.hpX = hx; this.hpY = hy;
     }
 
     render(nOS, oL, oR) {
@@ -734,6 +787,10 @@
       // body: Bladder sounds as Helmholtz until batch 07, Plant as Open until batch 06
       const bt = Math.round(P[PINDEX.body]);
       this.bodyOn = bt === BODY_HELMHOLTZ || bt === BODY_BLADDER;
+      this.plantOn = bt === BODY_PLANT;
+      // Time, and the pitch Link measures from: the preset's middle C
+      this.timeK = P[PINDEX.time]; this.link = P[PINDEX.link];
+      this.refLog = Math.log2(440) + (60 - 69 + P[PINDEX.transpose] + P[PINDEX.detune] / 100) / 12;
       this.direct = P[PINDEX.direct];
       // rib levels: rib 2 is the reference (0 dB); later ribs follow taper along u²
       const n = this.ribs, taper = P[PINDEX.taper];
@@ -755,19 +812,39 @@
       f *= Math.pow(2, v.kc);                    // the pitch keeper's correction
       const ft = f * Math.pow(2, P[PINDEX.tune] / 12), q0 = P[PINDEX.tymbalq];
       const n = this.ribs, tilt = P[PINDEX.tilt];
+      // every resonator stays within 20 Hz–16 kHz (the guard); Q follows the unclamped 1/f
       this.ribF[1] = ft * Math.pow(2, P[PINDEX.first] / 12);
       for (let k = 2; k <= n; k++) { const u = n > 2 ? (k - 2) / (n - 2) : 0; this.ribF[k] = ft * Math.pow(2, tilt * u * u / 12); }
-      for (let k = 1; k <= n; k++) this.ribQ[k] = q0 * ft / this.ribF[k];
+      for (let k = 1; k <= n; k++) { this.ribQ[k] = q0 * ft / this.ribF[k]; this.ribF[k] = clamp(this.ribF[k], F_MIN, F_CAP); }
       this.outF = ft * P[PINDEX.outratio];
       this.outQ = q0 * ft / this.outF;
+      this.outF = clamp(this.outF, F_MIN, F_CAP);
+      const srOS = this.srOS;
+      if (this.plantOn) {
+        // the stem's bending modes at Stem × 1, 2.76, 5.40 with Body Q; the chain's coefficient from Distance
+        v.periodS = srOS / f; v.halfT = 0.5 * v.periodS;
+        const q = P[PINDEX.bodyq], stem = P[PINDEX.stem];
+        let fr = stem, om = TWO_PI * Math.min(fr, 0.45 * srOS) / srOS, r = Math.exp(-Math.PI * fr / (q * srOS));
+        v.c0r = r * Math.cos(om); v.c0i = r * Math.sin(om); v.g0 = (1 - r) * STEM_GAINS[0];
+        fr = Math.min(stem * STEM_RATIOS[1], F_CAP); om = TWO_PI * fr / srOS; r = Math.exp(-Math.PI * fr / (q * srOS));
+        v.c1r = r * Math.cos(om); v.c1i = r * Math.sin(om); v.g1 = (1 - r) * STEM_GAINS[1];
+        fr = Math.min(stem * STEM_RATIOS[2], F_CAP); om = TWO_PI * fr / srOS; r = Math.exp(-Math.PI * fr / (q * srOS));
+        v.c2r = r * Math.cos(om); v.c2i = r * Math.sin(om); v.g2 = (1 - r) * STEM_GAINS[2];
+        const d = Math.max(1, P[PINDEX.distance] * DISP_MAX * srOS / AP_STAGES);   // low-frequency delay per stage, samples
+        v.apA = -(d - 1) / (d + 1);              // pole at +(d − 1)/(d + 1): the delay sits at low frequencies
+        v.kHP = 1 / (1 + TWO_PI * CONTACT_HZ / srOS);
+        v.bodyLevel = PLANT_GAIN;
+        return;
+      }
+      if (!this.bodyOn) { v.periodS = srOS / f; v.halfT = 0.5 * v.periodS; return; }
       // Helmholtz body: Aperture moves pitch, Q and level as the opercula do; Membrane raises Q
       const ap0 = P[PINDEX.aperture], ap = ap0 + (1 - ap0) * this.aftertouch, mem = P[PINDEX.membrane];
       const fb = f * Math.pow(AP_F_CLOSED, 1 - ap);
       const qb = P[PINDEX.bodyq] * (AP_Q_CLOSED + (1 - AP_Q_CLOSED) * ap) * (1 + MEMBRANE_Q * mem);
-      v.periodS = this.srOS / fb;
+      v.periodS = srOS / fb;
       v.halfT = 0.5 * v.periodS;
       // each mode: pole r·e^{iω}, input gain (1 − r)·level (unity at its peak); no allocation
-      const srOS = this.srOS, cav = dbToGain(-25 + 25 * P[PINDEX.cavity]);
+      const cav = dbToGain(-25 + 25 * P[PINDEX.cavity]);
       let fr = fb, om = TWO_PI * Math.min(fr, 0.45 * srOS) / srOS, r = Math.exp(-Math.PI * fr / (qb * srOS));
       v.c0r = r * Math.cos(om); v.c0i = r * Math.sin(om); v.g0 = 1 - r; v.om0 = om; v.r0 = r;
       fr = fb * CAVITY_RATIOS[0]; om = TWO_PI * Math.min(fr, 0.45 * srOS) / srOS; r = Math.exp(-Math.PI * fr / (qb * srOS));
@@ -839,7 +916,7 @@
 
   TymbalEngine.BLOCK = BLOCK; TymbalEngine.OS = OS;
   TymbalEngine.toNorm = toNorm; TymbalEngine.fromNorm = fromNorm;
-  const core = { CARRIER_OCT, JITTER_SD, RUBATO_SD, ASYNC_RUNDOWN, FALL_ST, FALL_DB, FALL_SHARE, INTRO_POW, CLICK_PHASE, KAPPA, TRANS_CYC, TRANS_LAG, LOCK_AIM, A_REF, HEAT_BASE, OUTRIB_DB, LOCK_GATE, BODY_GAIN, AP_F_CLOSED, AP_Q_CLOSED, AP_DB_CLOSED };
+  const core = { AP_STAGES, DISP_MAX, STEM_RATIOS, CARRIER_OCT, JITTER_SD, RUBATO_SD, ASYNC_RUNDOWN, FALL_ST, FALL_DB, FALL_SHARE, INTRO_POW, CLICK_PHASE, KAPPA, TRANS_CYC, TRANS_LAG, LOCK_AIM, A_REF, HEAT_BASE, OUTRIB_DB, LOCK_GATE, BODY_GAIN, AP_F_CLOSED, AP_Q_CLOSED, AP_DB_CLOSED };
   if (typeof module !== 'undefined' && module.exports) module.exports = { TymbalEngine, PARAMS, core };
   else root.TymbalEngine = TymbalEngine;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

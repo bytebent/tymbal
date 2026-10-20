@@ -3,7 +3,61 @@
 Quick results per batch: tests, experiments and pictures. Pictures live in `docs/tests/`. Run the
 tests with `node tests/engine-test.js`.
 
-**Now: 72 engine tests passing** (about 2 s). Benchmark: `node tools/perf.js`.
+**Now: 87 engine tests passing** (about 11 s). Benchmark: `node tools/perf.js`.
+
+## Batch 06 · moths and hoppers
+
+How it is built:
+
+- **Time** stretches every muscle, rib and song time (the rate is divided, spacing, Lead,
+  echemes, gaps, phrases and rests multiplied). Moth presets keep the moth's natural timing at
+  Time ×8 and place the carrier with the note (natural ÷ 8), like a time-expansion bat detector.
+- **Link** makes Time follow the note like tape: × 2^(Link × octaves below the preset's middle C).
+- **The guard** clamps every rib, OUT and right-tymbal frequency to 20 Hz–16 kHz.
+- **Plant body:** eight all-pass stages with their pole near DC (low frequencies arrive up to
+  20 ms late at Distance 1), the stem's first three bending modes (× 1, 2.76, 5.40), the dispersed
+  wave itself, a 40 Hz contact high-pass.
+- Popping ribs now click as loud as the OUT click (were 6 dB below): the moth's passive half-cycle
+  ended in one loud plate click.
+- Presets: *Bertholdia*, *Cycnia tenera*, *Achroia grisella* (all ×8); *Scaphoideus titanus*
+  female and male, a planthopper's snapping organ, *Tettigarcta* (a guess), a Rate-mode hopper
+  purr, and Link playing *Bertholdia* an octave down.
+
+Found and fixed:
+
+- The Plant's dispersion first ran the wrong way: the all-pass pole sat near Nyquist, delaying
+  highs instead of lows. The test missed it too, because its measuring band-passes delay 150 Hz by
+  about 2.6 ms more than 1.5 kHz on their own; it now compares Distance 1 with Distance 0.
+- *Bertholdia*'s spectrum peaked low (43 kHz natural) with the first rib spread (rib 2 on the
+  carrier, falling 16 st). Its top is broad and flat, so the peak of a lightly smoothed spectrum
+  jumped between 4.3 and 6.5 kHz with small level changes; the test now averages power over
+  ±1 kHz. A grid search over carrier, First, Tilt and Q fitted rib 2 at 60.8 kHz natural, +5 st,
+  −9.5 st, Q 9.
+
+| What | Paper | Engine |
+|---|---|---|
+| *Bertholdia* modulation cycle | 29.5 ms (×8: 236 ms) | 236.00 ms ✓ |
+| *Bertholdia* clicks per active half-cycle | 21.5 | 22 at full effort (20 at velocity 100) ✓ |
+| *Bertholdia* dominant | 48.7 kHz | 48.0 kHz ✓ |
+| *Bertholdia* −15 dB band | 21.9–83.1 kHz | 9.6–80.0 kHz: the top fits; below about 2.7 kHz (×8) the clicks' sharp onsets leave a broadband floor just above −15 dB |
+| *S. titanus* energy | below 900 Hz | 99.1% (female), 99.8% (male) in 50–900 Hz ✓ |
+| Planthopper calls | 50–5000 Hz | 98.5% inside ✓ |
+
+Also: Time ×4 stretches the stroke cycle and the rib spacing exactly 4× ✓, Time ×3 the echemes ✓,
+Rate mode keeps the note's rate under Time ✓; Link 1 doubles every time an octave down and halves
+it an octave up, Link 0.5 gives √2, Link 0 nothing ✓; every resonator stays within 20 Hz–16 kHz
+over notes 0–127 with the extreme settings, and the sound at those extremes keeps −24.8 dB above
+18 kHz and −43.2 dB below 20 Hz ✓; Plant at Distance 1 delays 150 Hz 6.6 ms more than 1.5 kHz ✓;
+the stem rings at Stem (+7.3 dB) and 2.76 × Stem (+4.0 dB against the bare tymbal) ✓; same output
+at buffer sizes 1, 64 and 999 with Plant, Time and Link ✓.
+
+Cost (`node tools/perf.js`): the moth 2.3–2.6% for one voice, the Plant body 2.4–2.6%, eight Plant
+voices 7.6–8.4%, the same order as the cicadas. This shared machine varies by about ±0.7 points
+between runs.
+
+Renders, 2–5% of real time each:
+
+![moths and hoppers](docs/tests/06-moths-hoppers.png)
 
 ## Batch 05 · cost
 

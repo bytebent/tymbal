@@ -105,6 +105,9 @@ Each tymbal is a **state machine** (OUT → loading → rib 1 IN → … → rib
   that gap is not a control: it comes out of the body. With `outclicks` above 0, some of the ribs
   also click on the way out, in reverse order and faster (`outspeed`): three small clicks in
   0.23 ms after a 2.9 ms buckling wave in *Neotibicen*; a full passive half-cycle in moths.
+  Popping ribs click as loud as the OUT click (`outlevel` sets both), so a moth's passive
+  half-cycle is a row of like clicks. [Decided, batch 06; at −6 dB below the OUT click a moth's
+  passive half-cycle ended in one loud click]
 - **Rest tuning.** At rest a *Cyclochila* tymbal resonates near 5.5–6 kHz and is 12–24 dB
   "deaf" at the song frequency, so the resting tymbal does not drain the body while the other one
   plays. The retuning resonator gives this for free.
@@ -224,10 +227,16 @@ wall all radiate, and the cavity does not act as a Helmholtz resonator. Moths ha
 resonator at all.
 
 **Plant.** Hopper signals travel as bending waves in stems, which are dispersive: higher
-frequencies travel faster. The engine runs the tymbal through an all-pass chain (smearing that
-grows with `distance`) and one to three stem modes around `stem` (default 250 Hz), with a
-contact-microphone colour. In *S. titanus* signals rose from about 200 to 250 Hz across leaf
-gaps. [Proposed; numbers from the brief]
+frequencies travel faster. In *S. titanus* signals rose from about 200 to 250 Hz across leaf gaps
+(via the brief). How it is built [Decided, batch 06; the constants are estimates]:
+
+- Both tymbals' sum runs through eight first-order all-pass stages whose pole sits near DC, so
+  low frequencies are delayed and high ones are not: a click arrives as a downward trail. At
+  `distance` 1 the low-frequency delay through the chain is 20 ms; at 0 there is none.
+- Then the stem's first three bending modes, at `stem` × 1, 2.76 and 5.40 (a free–free beam),
+  with Body Q and levels 1, ½, ¼, plus the dispersed wave itself at 0.35.
+- Contact colour: a 40 Hz high-pass. Mono, centred.
+- The lock uses the tymbal's own ringing, as with Open; the pitch keeper is off.
 
 **Direct leak** (`direct`): how much tymbal sound radiates without the body. In *Cyclochila*'s
 song the 6 kHz components are at least 30 dB below the 4 kHz peak, so the default is small.
@@ -342,25 +351,38 @@ A held key sings. `song` [Decided, batch 04]:
 | Family | Tymbal | Body | Time | Range |
 |---|---|---|---|---|
 | Cicadas | 2–12 ribs, coherent or pulsed | Helmholtz, Bladder or Open | Natural | Carriers 0.85–15 kHz: audible as they are |
-| Tymbal moths | Many striations buckling as a wave: an active half-cycle of 1–21.5 clicks, a pause, a passive half-cycle | Open | Slowed | Natural carriers 28–130 kHz |
+| Tymbal moths | Many striations buckling as a wave: an active half-cycle of 1–21.5 clicks, a pause, a passive half-cycle | Open | Slowed (×8 in the presets) | Natural carriers 28–130 kHz |
 | Hoppers | Few ribs, or a two-recoil snapping organ | Plant | Natural | 50–5000 Hz: audible, but carried by plants, not air |
 
-**Moths** use the same tymbal with many ribs, short spacing and full `outclicks`. Their
-frequency sweep within a half-cycle (*Bertholdia*: 3.9 kHz per ms) is the rib tilt.
+**Moths** use the same tymbal with many ribs, short spacing and full `outclicks`, an Open body
+and a stiff tymbal (no lock). Hold sets where the passive half-cycle starts; Out speed 1 gives it
+the active one's spacing. The spread of rib pitches (First, Tilt) sets how broad the spectrum is:
+*Bertholdia*'s dominant 48.7 kHz and −15 dB band of 21.9–83.1 kHz fit rib 2 at 60.8 kHz, rib 1
++5 st, a −9.5 st tilt across 22 ribs and Q 9 (natural terms). [Decided, batch 06]
 
 **Scaling.** Ultrasonic moths come into range like a time-expansion bat detector: slowing time
 and lowering pitch by the same factor keeps the cycles per click, the clicks per half-cycle and
 the sweep shape, so a moth sounds like a bigger moth, not a dull tick. Clicks are defined by Q
 (cycles), so they keep their cycle count at any pitch already; only the timing needs scaling.
-[Proposed]
+Moth presets keep the moth's natural timing and place the carrier with the note (natural ÷ 8).
+[Decided, batch 06]
 
-- `time` (×0.1–×32) stretches all muscle, rib and song times. Moth presets use ×8: *Bertholdia*
-  then has a 6.1 kHz carrier, about 560 clicks per second and 236 ms modulation cycles.
-- `link` (0–1): how much time follows the note, around the preset's reference pitch. At 1, lower
-  notes slow down like tape; at 0 timing stays put. Default 0. [Open: listening test]
-- **Guard:** carriers above 16 kHz drop by octaves (as in Dolphin), and nothing goes below 20 Hz.
+- `time` (×0.1–×32) stretches all muscle, rib and song times: the muscle rate is divided by it,
+  rib spacing, Lead, echemes, gaps, phrases and rests are multiplied. Moth presets use ×8:
+  *Bertholdia* then has a 6.1 kHz carrier, about 560 clicks per second and 236 ms modulation
+  cycles. In Rate mode Time leaves the rate alone (the note sets it) and stretches the ribs. With
+  Sync the beat grid wins over Time for echemes and phrases.
+- `link` (0–1): how much time follows the note like tape, measured from middle C with the
+  preset's Transpose and Detune: time × 2^(Link × octaves below). At 1 an octave down doubles
+  every time; at 0.5 it stretches by √2. Bend counts too. Carrier mode only. Default 0.
+  [Open: listening test]
+- **Guard:** the carrier drops by octaves above 16 kHz (as in Dolphin) and stops at 20 Hz; every
+  rib, OUT and right-tymbal frequency is clamped to 20 Hz–16 kHz (Q follows the unclamped
+  frequency). A Q 20 click at exactly 16 kHz still spills a little skirt past it; nothing rings
+  above 18 kHz (−25 dB). [Decided, batch 06]
 
-Hopper presets need no time scaling; their low carriers sit where the note puts them.
+Hopper presets need no time scaling; their low carriers sit where the note puts them (below
+262 Hz the preset plays a lower note, since Transpose stops at −48 st).
 
 ## 10. Chorus
 
